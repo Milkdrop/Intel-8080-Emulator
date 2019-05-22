@@ -1,9 +1,10 @@
 #include <stdio.h>
 #include <SDL2/SDL.h>
 #include <string>
+#include <time.h>
 #include "Display.h"
-#include "CPU.h"
 #include "MMU.h"
+#include "CPU.h"
 
 void OpenFileError (std::string Filename) {
 	fprintf (stderr, "There was an error opening the file: %s\n", Filename.c_str());
@@ -55,6 +56,8 @@ int main(int argc, char** argv) {
 	LoadROMData (&mmu, "Demos/invaders/invaders.e", 0x1800);
 
 	bool quit = false;
+	uint32_t LastDraw = 0;
+	uint32_t CurrentTime = 0;
 	SDL_Event ev;
 	
 	while (!quit) {
@@ -64,7 +67,13 @@ int main(int argc, char** argv) {
 			}
 		}
 		
+		CurrentTime = ((float) clock() / CLOCKS_PER_SEC) * 1000; // Get Miliseconds
+		if (LastDraw > CurrentTime) // Overflow
+			LastDraw = 0;
+			
 		cpu.Clock();
-		Disp.Update (mmu.VRAM, 256, 224);
+		if (CurrentTime - LastDraw > 1000 / 60) { // 60 FPS
+			Disp.Update (mmu.VRAM, 256, 224);
+		}
 	}
 }

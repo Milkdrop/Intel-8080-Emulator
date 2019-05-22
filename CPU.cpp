@@ -1,7 +1,8 @@
 #include <string>
 #include "CPU.h"
 
-CPU::CPU (MMU* _mmu, int _ClockSpeed) {
+CPU::CPU (MMU* _mmu, uint16_t _ClockSpeed) {
+	ClockCount = 0;
 	ClockSpeed = _ClockSpeed;
 	mmu = _mmu;
 	
@@ -22,14 +23,6 @@ inline void Unknown (uint8_t Instruction) {
 
 inline void Unimplemented (std::string Name) {
 	fprintf (stderr, "Unimplemented Instruction: %s\n", Name.c_str());
-}
-
-inline uint8_t CPU::GetByteAt (uint16_t Address) {
-	return *(mmu->MemoryMap [Address]);
-}
-
-inline void CPU::SetByteAt (uint16_t Address, uint8_t Value) {
-	*(mmu->MemoryMap [Address]) = Value;
 }
 
 inline uint8_t* CPU::GetReg (uint8_t ID) {
@@ -71,7 +64,7 @@ inline uint16_t* CPU::GetRegPair (uint8_t ID) {
 }
 
 inline uint16_t CPU::GetInstructionLBHB () {
-	uint16_t Value = GetByteAt(PC + 1) * 0x100 + GetByteAt(PC);
+	uint16_t Value = mmu->GetByteAt(PC + 1) * 0x100 + mmu->GetByteAt(PC);
 	PC += 2;
 	return Value;
 }
@@ -184,13 +177,13 @@ uint8_t CPU::GetCondition (uint8_t ID) {
 }
 
 void CPU::StackPush (uint16_t Value) {
-	SetByteAt (SP - 1, Value & 0xFF);
-	SetByteAt (SP - 2, Value >> 8);
+	mmu->SetByteAt (SP - 1, Value & 0xFF);
+	mmu->SetByteAt (SP - 2, Value >> 8);
 	SP -= 2;
 }
 
 uint16_t CPU::StackPop () {
-	uint16_t Value = GetByteAt (SP) + GetByteAt (SP - 1) * 0x100;
+	uint16_t Value = mmu->GetByteAt (SP) + mmu->GetByteAt (SP - 1) * 0x100;
 	SP += 2;
 	return Value;
 }
@@ -222,7 +215,10 @@ void CPU::PopPSW () {
 void CPU::Clock () {
 	if (Halt)
 		return;
-	uint8_t Instruction = GetByteAt (PC);			// # # # # # # # #
+	
+	ClockCount += 7; // The mean of clocks per instruction is 7 ... Not cycle accurate, but gets the job done
+	
+	uint8_t Instruction = mmu->GetByteAt (PC);			// # # # # # # # #
 	uint8_t First2Bits = Instruction >> 6;			// # # _ _ _ _ _ _
 	uint8_t destReg = (Instruction >> 3) & 7; 		// _ _ # # # _ _ _
 	uint8_t srcReg = Instruction & 7;				// _ _ _ _ _ # # #
@@ -231,9 +227,11 @@ void CPU::Clock () {
 	//printf (">>> Executing 0x%02x:", Instruction);
 	//PrintBinary (Instruction);
 	//printf (" (0x%04x)\n", PC);
-
+	
+	//printf ("INST 0x%02x (0x%04x)\n", Instruction, PC);
+	
 	PC++;
-
+	
 	switch (First2Bits) {
 	case 0:
 		switch (srcReg) {
@@ -254,26 +252,26 @@ void CPU::Clock () {
 		case 2:
 			switch (destReg) {
 			case 7: // LDA a
-				reg_A = GetByteAt(GetInstructionLBHB());
+				reg_A = mmu->GetByteAt(GetInstructionLBHB());
 				break;
 			case 6: // STA a
-				SetByteAt(GetInstructionLBHB(), reg_A);
+				mmu->SetByteAt(GetInstructionLBHB(), reg_A);
 				break;
 			case 5: // LHLD a
 				WorkAddr = GetInstructionLBHB();
-				*reg_L = GetByteAt (WorkAddr);
-				*reg_H = GetByteAt (WorkAddr + 1);
+				*reg_L = mmu->GetByteAt (WorkAddr);
+				*reg_H = mmu->GetByteAt (WorkAddr + 1);
 				break;
 			case 4: // SHLD a
 				WorkAddr = GetInstructionLBHB();
-				SetByteAt (WorkAddr, *reg_L);
-				SetByteAt (WorkAddr, *reg_H);
+				mmu->SetByteAt (WorkAddr, *reg_L);
+				mmu->SetByteAt (WorkAddr, *reg_H);
 				break;
 			default:
 				if (destReg & 1) // LDAX RP
-					reg_A = GetByteAt (*GetRegPair(RegPair));
+					reg_A = mmu->GetByteAt (*GetRegPair(RegPair));
 				else // STAX RP
-					SetByteAt (*GetRegPair(RegPair), reg_A);
+					mmu->SetByteAt (*GetRegPair(RegPair), reg_A);
 			}
 			break;
 		case 3:
@@ -291,7 +289,7 @@ void CPU::Clock () {
 			(*GetReg (destReg))--;
 			break;
 		case 6: // MVI D, #
-			*GetReg (destReg) = GetByteAt (PC++);
+			*GetReg (destReg) = mmu->GetByteAt (PC++);
 			break;
 		case 7:
 			switch (destReg) {
@@ -405,6 +403,7 @@ void CPU::Clock () {
 			switch (destReg) {
 			case 1: // RET
 				PC = StackPop();
+				printf ("Returning to 0x%04x\n", PC);
 				break;
 			case 5: // PCHL
 				PC = reg_HL;
@@ -433,11 +432,13 @@ void CPU::Clock () {
 				Unknown (Instruction);
 				break;
 			case 2: // OUT p
+				WorkValue = mmu->GetByteAt (PC++);
 				Unimplemented ("OUTPUT p");
 				break;
 			case 3: // IN p
+				WorkValue = mmu->GetByteAt (PC++);
 				reg_A = 0;
-				Unimplemented ("INPUT p");
+				printf ("Inputing from port 0x%02x", WorkValue);
 				break;
 			case 4: // XTHL
 				WorkValue = reg_HL;
@@ -468,6 +469,7 @@ void CPU::Clock () {
 			if (destReg & 1) { // CALL
 				StackPush (PC);
 				PC = GetInstructionLBHB();
+				printf ("Calling 0x%02x\n", PC);
 			} else { // PUSH RP
 				if (RegPair == 3) // Processor Status Word (PSW)
 					PushPSW();
@@ -478,39 +480,39 @@ void CPU::Clock () {
 		case 6:
 			switch (destReg) {
 			case 0: // ADI #
-				WorkValue = GetByteAt (PC++);
+				WorkValue = mmu->GetByteAt (PC++);
 				SetFlagsAdd (reg_A, WorkValue, 1);
 				reg_A += WorkValue;
 				break;
 			case 1: // ACI #
-				WorkValue = (uint16_t) GetByteAt (PC++) + flag_C;
+				WorkValue = (uint16_t) mmu->GetByteAt (PC++) + flag_C;
 				SetFlagsAdd (reg_A, WorkValue, 1);
 				reg_A += WorkValue;
 				break;
 			case 2: // SUI #
-				WorkValue = GetByteAt (PC++);
+				WorkValue = mmu->GetByteAt (PC++);
 				SetFlagsSub (reg_A, WorkValue, 1);
 				reg_A -= WorkValue;
 				break;
 			case 3: // SBI #
-				WorkValue = (uint16_t) GetByteAt (PC++) + flag_C;
+				WorkValue = (uint16_t) mmu->GetByteAt (PC++) + flag_C;
 				SetFlagsSub (reg_A, WorkValue, 1);
 				reg_A -= WorkValue;
 				break;
 			case 4: // ANI #
-				reg_A &= GetByteAt (PC++);
+				reg_A &= mmu->GetByteAt (PC++);
 				SetFlagsAdd (reg_A, 0, 0);
 				break;
 			case 5: // XRI #
-				reg_A ^= GetByteAt (PC++);
+				reg_A ^= mmu->GetByteAt (PC++);
 				SetFlagsAdd (reg_A, 0, 0);
 				break;
 			case 6: // ORI #
-				reg_A |= GetByteAt (PC++);
+				reg_A |= mmu->GetByteAt (PC++);
 				SetFlagsAdd (reg_A, 0, 0);
 				break;
 			case 7: // CPI #
-				SetFlagsSub (reg_A, GetByteAt (PC++), 1);
+				SetFlagsSub (reg_A, mmu->GetByteAt (PC++), 1);
 				break;
 			}
 			break;

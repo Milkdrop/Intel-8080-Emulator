@@ -1,12 +1,15 @@
 #include <stdint.h>
 #include "MMU.h"
+#ifndef CPU_H
+#define CPU_H
 
 class CPU {
 	public:
-		CPU (MMU* _mmu, int _ClockSpeed);
+		CPU (MMU* _mmu, uint16_t _ClockSpeed);
 		void Clock ();
 	private:
-		int ClockSpeed;
+		uint32_t ClockCount;
+		uint16_t ClockSpeed;
 		MMU* mmu;
 		
 		uint8_t Interrupts;
@@ -42,8 +45,6 @@ class CPU {
 		void SetFlagsAdd (uint8_t OpA, uint16_t OpB, uint8_t setCarry);
 		void SetFlagsSub (uint8_t OpA, uint16_t OpB, uint8_t setCarry);
 		uint8_t GetCondition (uint8_t ID);
-		uint8_t GetByteAt (uint16_t Address);
-		void SetByteAt (uint16_t Address, uint8_t Value);
 		uint8_t* GetReg (uint8_t ID);
 		uint16_t* GetRegPair (uint8_t ID);
 		uint16_t GetInstructionLBHB ();
@@ -52,3 +53,5 @@ class CPU {
 		void PushPSW ();
 		void PopPSW ();
 };
+
+#endif

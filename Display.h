@@ -2,6 +2,8 @@
 #include <SDL2/SDL.h>
 #include <stdio.h>
 #include <string>
+#ifndef DISPLAY_H
+#define DISPLAY_H
 
 class Display {
 public:
@@ -13,3 +15,4 @@ private:
 	SDL_Renderer* main_renderer;
 };
 
+#endif
