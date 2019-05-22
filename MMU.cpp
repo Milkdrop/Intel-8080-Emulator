@@ -4,7 +4,7 @@
 
 void MMU::LoadInMemory (uint8_t* Buffer, uint16_t Address, int BufferSize) {
 	for (int i = 0; i < BufferSize; i++)
-		*(MemoryMap[i]) = Buffer[i];
+		*(MemoryMap[Address + i]) = Buffer[i];
 }
 
 MMU::MMU() {
