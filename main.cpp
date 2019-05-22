@@ -47,7 +47,7 @@ int main(int argc, char** argv) {
 	MMU mmu;
 	CPU cpu(&mmu, 120);
 	Display Disp("Intel 8080", 256, 224, 2);
-	DisplayDemo(&mmu, 255);
+	//DisplayDemo(&mmu, 255);
 
 	LoadROMData (&mmu, "Demos/invaders/invaders.h", 0x0000);
 	LoadROMData (&mmu, "Demos/invaders/invaders.g", 0x0800);

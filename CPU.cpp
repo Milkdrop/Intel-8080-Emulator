@@ -126,7 +126,12 @@ void CPU::Debug () {
 	printf ("E: 0x%02x\n", *reg_E);
 	printf ("H: 0x%02x\n", *reg_H);
 	printf ("L: 0x%02x\n", *reg_L);
-	printf ("M: 0x%02x\n", *mmu->MemoryMap[reg_HL]);
+	printf ("M: ");
+	if (reg_HL < 0x4400)
+		printf ("0x%02x", *mmu->MemoryMap[reg_HL]);
+	else
+		printf ("0x??");
+	printf ("\n");
 	printf ("SP: 0x%04x\n", SP);
 	printf ("PC: 0x%04x\n", PC);
 
@@ -431,6 +436,7 @@ void CPU::Clock () {
 				Unimplemented ("OUTPUT p");
 				break;
 			case 3: // IN p
+				reg_A = 0;
 				Unimplemented ("INPUT p");
 				break;
 			case 4: // XTHL
