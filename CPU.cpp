@@ -20,9 +20,12 @@ ID == 7: return flag_S;
 */
 
 CPU::CPU (MMU* _mmu, uint16_t _ClockSpeed) {
-	ClockCount = 0;
+	LastExecutionTime = 0;
+	InstructionCount = 0;
 	ClockSpeed = _ClockSpeed;
 	mmu = _mmu;
+	
+	memset (Port, 0, sizeof(Port));
 	
 	ptr_reg_A = &reg_A;
 	RegMap[0] = &reg_B;
@@ -45,7 +48,7 @@ CPU::CPU (MMU* _mmu, uint16_t _ClockSpeed) {
 	FlagMap[3] = &flag_S;
 	
 	memset (Benchmark, 0, sizeof(uint32_t) * 256);
-	Interrupts = 1;
+	InterruptsEnabled = 0;
 	Halt = 0;
 	reg_A = 0;
 	reg_BC = 0;
@@ -177,13 +180,35 @@ void CPU::PopPSW () {
 	flag_S = (PSW >> 15) & 1;
 }
 
+void CPU::Interrupt (uint8_t ID) {
+	if (!InterruptsEnabled)
+		return;
+	
+	switch (ID) {
+		case 0: // Mid Screen - RST 1
+			StackPush (PC);
+			PC = 0x0008;
+			break;
+		case 1: // End Screen - RST 2
+			StackPush (PC);
+			PC = 0x0010;
+	}
+}
+
+uint8_t PrintPC;
+
 void CPU::Clock () {
 	if (Halt)
 		return;
 	
-	ClockCount++; // The mean of clocks per instruction is 7 ... Not cycle accurate, but gets the job done
+	uint64_t CurrentTime = clock(); // In Microseconds (Should work only on Unix, though)
+	if (CurrentTime - LastExecutionTime < 1000000 / ClockSpeed)
+		return;
 	
-	uint8_t Instruction = GetByteAt (PC);		// # # # # # # # #
+	LastExecutionTime = CurrentTime;
+	InstructionCount++;
+	
+	uint8_t Instruction = GetByteAt (PC);			// # # # # # # # #
 	uint8_t First2Bits = Instruction >> 6;			// # # _ _ _ _ _ _
 	uint8_t destReg = (Instruction >> 3) & 7; 		// _ _ # # # _ _ _
 	uint8_t srcReg = Instruction & 7;				// _ _ _ _ _ # # #
@@ -193,7 +218,11 @@ void CPU::Clock () {
 	
 	Benchmark[Instruction]++;
 	
-	//printf ("INST 0x%02x (0x%04x)\n", Instruction, PC);
+	if (PrintPC && false) {
+		printf ("INST 0x%02x (0x%04x)\n", Instruction, PC);
+		printf ("%d\n", reg_A);
+	}
+	
 	PC++;
 	
 	switch (First2Bits) {
@@ -409,12 +438,15 @@ void CPU::Clock () {
 				break;
 			case 2: // OUT p
 				WorkValue = GetByteAt (PC++);
-				printf ("Outputting 0x%02x on port 0x%02x\n", reg_A, WorkValue);
+				PrintPC = 1;
+				if (WorkValue != 0x06) { // Not Watchdog
+					printf ("Outputting 0x%02x on port 0x%02x\n", reg_A, WorkValue);
+				}
 				break;
 			case 3: // IN p
 				WorkValue = GetByteAt (PC++);
-				reg_A = 0;
-				printf ("Inputing from port 0x%02x\n", WorkValue);
+				reg_A = Port[WorkValue];
+				//printf ("Inputing from port 0x%02x\n", WorkValue);
 				break;
 			case 4: // XTHL
 				WorkValue = reg_HL;
@@ -427,10 +459,10 @@ void CPU::Clock () {
 				reg_HL = WorkValue;
 				break;
 			case 6: // DI
-				Interrupts = 0;
+				InterruptsEnabled = 0;
 				break;
 			case 7: // EI
-				Interrupts = 1;
+				InterruptsEnabled = 1;
 				break;
 			}
 			break;

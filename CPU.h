@@ -7,18 +7,21 @@ class CPU {
 	public:
 		CPU (MMU* _mmu, uint16_t _ClockSpeed);
 		void Clock ();
-		uint32_t ClockCount;
+		void Interrupt (uint8_t ID);
+		uint32_t InstructionCount;
+		uint8_t Port[7];
 		uint32_t Benchmark[256];
 	private:
-		uint16_t ClockSpeed;
+		uint64_t LastExecutionTime;
+		uint16_t ClockSpeed; // in Hz
 		MMU* mmu;
 		
-		uint8_t Interrupts;
+		uint8_t InterruptsEnabled;
 		uint8_t Halt;
 		
 		uint16_t WorkAddr;
 		uint32_t WorkValue;
-
+		
 		uint8_t reg_A;
 		uint8_t* ptr_reg_A;
 		uint8_t* reg_M;

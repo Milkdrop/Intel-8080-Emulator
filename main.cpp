@@ -62,19 +62,19 @@ int main(int argc, char** argv) {
 	}
 	
 	MMU mmu;
-	CPU cpu(&mmu, 120);
-	Display Disp("Intel 8080", 256, 224, 2);
+	CPU cpu(&mmu, 360000);
+	Display Disp("Intel 8080", 256, 224, 2, &cpu);
 	//DisplayDemo(&mmu, 255);
 
 	LoadROMData (&mmu, "Demos/invaders/invaders.h", 0x0000);
 	LoadROMData (&mmu, "Demos/invaders/invaders.g", 0x0800);
 	LoadROMData (&mmu, "Demos/invaders/invaders.f", 0x1000);
 	LoadROMData (&mmu, "Demos/invaders/invaders.e", 0x1800);
-
+	
 	bool quit = false;
 	uint32_t LastDraw = 0;
 	uint32_t LastDebug = 0;
-	uint32_t LastClock = 0;
+	uint32_t LastInstructionCount = 0;
 	uint32_t CurrentTime = 0;
 	const uint8_t *keyboard = SDL_GetKeyboardState(NULL);
 	uint8_t Press0 = 0;
@@ -88,10 +88,12 @@ int main(int argc, char** argv) {
 			}
 		}
 		
+		// Time Checking
 		CurrentTime = ((float) clock() / CLOCKS_PER_SEC) * 1000; // Get Miliseconds
-		if (LastDraw > CurrentTime) // Overflow
+		if (LastDraw > CurrentTime) // Overflow Protection
 			LastDraw = 0;
-			
+		
+		// Debugging Function
 		if (keyboard[SDL_SCANCODE_0]) {
 			if (Press0 == 0) {
 				Press0 = 1;
@@ -112,20 +114,65 @@ int main(int argc, char** argv) {
 				}
 				
 				uint32_t MsPassed = CurrentTime - LastDebug;
-				uint32_t INSTPassed = cpu.ClockCount - LastClock;
+				uint32_t INSTPassed = cpu.InstructionCount - LastInstructionCount;
 				LastDebug = CurrentTime;
 				printf ("Executed %d INST in %dms\n", INSTPassed, MsPassed);
 				printf ("Speed: %f INST/s\n", INSTPassed * ((float) 1000 / MsPassed));
-				LastClock = cpu.ClockCount;
+				LastInstructionCount = cpu.InstructionCount;
 			}
 		} else
 			Press0 = 0;
-			
-		cpu.Clock();
 		
+		// Port Setting
+		memset (cpu.Port, 0, sizeof(cpu.Port));
+		
+		// Always on bits
+		cpu.Port[0] |= 1 << 1;
+		cpu.Port[0] |= 1 << 2;
+		cpu.Port[0] |= 1 << 3;
+		cpu.Port[1] |= 1 << 3;
+		
+		if (keyboard[SDL_SCANCODE_SPACE]) { // P1 Fire
+			cpu.Port[0] |= 1 << 4;
+			cpu.Port[1] |= 1 << 4;
+		}
+		
+		if (keyboard[SDL_SCANCODE_A]) { // P1 Left
+			cpu.Port[0] |= 1 << 5;
+			cpu.Port[1] |= 1 << 5;
+		}
+		
+		if (keyboard[SDL_SCANCODE_D]) { // P1 Right
+			cpu.Port[0] |= 1 << 6;
+			cpu.Port[1] |= 1 << 6;
+		}
+		
+		if (keyboard[SDL_SCANCODE_UP]) // P2 Fire
+			cpu.Port[2] |= 1 << 4;
+		
+		if (keyboard[SDL_SCANCODE_LEFT]) // P2 Left
+			cpu.Port[2] |= 1 << 5;
+			
+		if (keyboard[SDL_SCANCODE_RIGHT]) // P2 Right
+			cpu.Port[2] |= 1 << 6;
+			
+		if (keyboard[SDL_SCANCODE_RETURN]) // Credit
+			cpu.Port[1] |= 1 << 0;
+		
+		if (keyboard[SDL_SCANCODE_1]) // 1P Start
+			cpu.Port[1] |= 1 << 2;
+		
+		if (keyboard[SDL_SCANCODE_2]) // 2P Start
+			cpu.Port[1] |= 1 << 1;
+		
+		if (keyboard[SDL_SCANCODE_DELETE]) // Tilt
+			cpu.Port[2] |= 1 << 2;
+		
+		// Computations
+		cpu.Clock();
 		if (CurrentTime - LastDraw > 1000 / 60) { // 60 FPS
 			LastDraw = CurrentTime;
-			Disp.Update (mmu.VRAM, 256, 224);
+			Disp.Update (mmu.VRAM);
 		}
 	}
 }

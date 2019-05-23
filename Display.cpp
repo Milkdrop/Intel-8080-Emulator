@@ -1,7 +1,11 @@
 #include "Display.h"
 
-Display::Display (std::string Name, int Width, int Height, uint16_t _PixelSize) {
+Display::Display (std::string Name, uint16_t _Width, uint16_t _Height, uint16_t _PixelSize, CPU* _cpu) {
 	PixelSize = _PixelSize;
+	Width = _Width;
+	Height = _Height;
+	cpu = _cpu;
+	
 	main_window = SDL_CreateWindow (Name.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, Width * PixelSize, Height * PixelSize, SDL_WINDOW_SHOWN);
 
 	if (main_window == NULL) {
@@ -14,12 +18,15 @@ Display::Display (std::string Name, int Width, int Height, uint16_t _PixelSize) 
 	}
 }
 
-void Display::Update(uint8_t* VRAM, int Width, int Height) {
+void Display::Update(uint8_t* VRAM) {
 	SDL_SetRenderDrawColor(main_renderer, 0x00, 0x00, 0x00, 0x00); // Set black for BG
 	SDL_RenderClear(main_renderer);
 	SDL_SetRenderDrawColor(main_renderer, 0xFF, 0xFF, 0xFF, 0xFF); // Set white for FG
 
 	for (int y = 0; y < Height; y++) {
+		if (y == Height >> 1)
+			cpu->Interrupt (0);
+		
 		for (int x = 0; x < Width; x += 8) {
 			uint8_t VRAMByte = VRAM [y * (Width >> 3) + (x >> 3)];
 
@@ -32,5 +39,6 @@ void Display::Update(uint8_t* VRAM, int Width, int Height) {
 		}
 	}
 
+	cpu->Interrupt (1);
 	SDL_RenderPresent(main_renderer);
 }
