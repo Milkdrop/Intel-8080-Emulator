@@ -2,6 +2,8 @@
 #include <SDL2/SDL.h>
 #include <string>
 #include <time.h>
+#include <cstring>
+#include <algorithm>
 #include "Display.h"
 #include "MMU.h"
 #include "CPU.h"
@@ -39,6 +41,20 @@ void LoadROMData (MMU* mmu, std::string Filename, uint16_t Address) {
 	mmu->LoadInMemory (Buffer, Address, ROMSize);
 }
 
+void PrintBinary (uint8_t Value) {
+	for (int i = 0; i < 8; i++) {
+		if (Value & 128)
+			printf ("1");
+		else
+			printf ("0");
+		Value <<= 1;
+	}
+}
+
+bool OpFunc(std::pair<uint8_t, uint32_t> A, std::pair<uint8_t, uint32_t> B) {
+	return A.second < B.second;
+}
+
 int main(int argc, char** argv) {
 	if (SDL_Init (SDL_INIT_EVERYTHING) < 0) {
 		fprintf(stderr, "SDL failed to initialize: %s", SDL_GetError());
@@ -58,6 +74,9 @@ int main(int argc, char** argv) {
 	bool quit = false;
 	uint32_t LastDraw = 0;
 	uint32_t CurrentTime = 0;
+	const uint8_t *keyboard = SDL_GetKeyboardState(NULL);
+	uint8_t Press0 = 0;
+	
 	SDL_Event ev;
 	
 	while (!quit) {
@@ -67,6 +86,26 @@ int main(int argc, char** argv) {
 			}
 		}
 		
+		if (keyboard[SDL_SCANCODE_0]) {
+			if (Press0 == 0) {
+				Press0 = 1;
+				std::pair<uint8_t, uint32_t> Benchmark[256];
+				for (int i = 0; i < 256; i++) {
+					Benchmark[i].first = i;
+					Benchmark[i].second = cpu.Benchmark[i];
+				}
+				
+				sort (Benchmark, Benchmark + 256, OpFunc);
+				printf ("Begin Instruction Benchmark Dump:\n");
+				for (int i = 0; i < 256; i++) {
+					printf ("INST ");
+					PrintBinary (Benchmark[i].first);
+					printf (": %d\n", Benchmark[i].second);
+				}
+			}
+		} else
+			Press0 = 0;
+			
 		CurrentTime = ((float) clock() / CLOCKS_PER_SEC) * 1000; // Get Miliseconds
 		if (LastDraw > CurrentTime) // Overflow
 			LastDraw = 0;

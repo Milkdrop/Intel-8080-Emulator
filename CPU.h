@@ -7,6 +7,7 @@ class CPU {
 	public:
 		CPU (MMU* _mmu, uint16_t _ClockSpeed);
 		void Clock ();
+		uint32_t Benchmark[256];
 	private:
 		uint32_t ClockCount;
 		uint16_t ClockSpeed;

@@ -23,8 +23,6 @@ class MMU {
 		uint8_t* VRAM = Memory + 0x2400;
 
 		uint8_t* MemoryMap[0x4400];
-		uint8_t GetByteAt (uint16_t Address);
-		void SetByteAt (uint16_t Address, uint8_t Value);
 		void LoadInMemory (uint8_t* Buffer, uint16_t Address, int BufferSize);
 	private:
 		uint8_t Memory[0x4000];

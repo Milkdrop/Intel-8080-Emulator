@@ -18,11 +18,3 @@ void MMU::LoadInMemory (uint8_t* Buffer, uint16_t Address, int BufferSize) {
 	for (int i = 0; i < BufferSize; i++)
 		*(MemoryMap[Address + i]) = Buffer[i];
 }
-
-uint8_t MMU::GetByteAt (uint16_t Address) {
-	return *(MemoryMap[Address]);
-}
-
-void MMU::SetByteAt (uint16_t Address, uint8_t Value) {
-	*(MemoryMap[Address]) = Value;
-}
