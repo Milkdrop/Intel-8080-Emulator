@@ -179,11 +179,14 @@ uint8_t CPU::GetCondition (uint8_t ID) {
 void CPU::StackPush (uint16_t Value) {
 	mmu->SetByteAt (SP - 1, Value & 0xFF);
 	mmu->SetByteAt (SP - 2, Value >> 8);
+	printf ("Pushing on Stack: 0x%04x: 0x%02x / 0x%04x: 0x%02x\n", SP - 1, Value & 0xFF, SP - 2, Value >> 8);
 	SP -= 2;
 }
 
 uint16_t CPU::StackPop () {
-	uint16_t Value = mmu->GetByteAt (SP) + mmu->GetByteAt (SP - 1) * 0x100;
+	uint16_t Value = mmu->GetByteAt (SP + 1) + mmu->GetByteAt (SP) * 0x100;
+	printf ("Popping from Stack: 0x%04x: 0x%02x / 0x%04x: 0x%02x\n", SP, mmu->GetByteAt (SP), SP + 1, mmu->GetByteAt (SP + 1));
+	printf ("%u\n", Value);
 	SP += 2;
 	return Value;
 }
@@ -218,7 +221,7 @@ void CPU::Clock () {
 	
 	ClockCount += 7; // The mean of clocks per instruction is 7 ... Not cycle accurate, but gets the job done
 	
-	uint8_t Instruction = mmu->GetByteAt (PC);			// # # # # # # # #
+	uint8_t Instruction = mmu->GetByteAt (PC);		// # # # # # # # #
 	uint8_t First2Bits = Instruction >> 6;			// # # _ _ _ _ _ _
 	uint8_t destReg = (Instruction >> 3) & 7; 		// _ _ # # # _ _ _
 	uint8_t srcReg = Instruction & 7;				// _ _ _ _ _ # # #
@@ -396,8 +399,10 @@ void CPU::Clock () {
 	case 3:
 		switch (srcReg) {
 		case 0: // Rccc
-			if (GetCondition (destReg))
+			if (GetCondition (destReg)) {
 				PC = StackPop();
+				printf ("Returning to 0x%04x (Cond)\n", PC);
+			}
 			break;
 		case 1:
 			switch (destReg) {
@@ -420,13 +425,16 @@ void CPU::Clock () {
 			break;
 		case 2: //Jccc
 			WorkAddr = GetInstructionLBHB();
-			if (GetCondition (destReg))
+			if (GetCondition (destReg)) {
 				PC = WorkAddr;
+				// printf ("Jumping to 0x%04x (Cond)\n", PC);
+			}
 			break;
 		case 3:
 			switch (destReg) {
 			case 0: // JMP
 				PC = GetInstructionLBHB();
+				printf ("Jumping to 0x%04x\n", PC);
 				break;
 			case 1:
 				Unknown (Instruction);
@@ -438,7 +446,7 @@ void CPU::Clock () {
 			case 3: // IN p
 				WorkValue = mmu->GetByteAt (PC++);
 				reg_A = 0;
-				printf ("Inputing from port 0x%02x", WorkValue);
+				printf ("Inputing from port 0x%02x\n", WorkValue);
 				break;
 			case 4: // XTHL
 				WorkValue = reg_HL;
@@ -462,12 +470,15 @@ void CPU::Clock () {
 			WorkAddr = GetInstructionLBHB();
 			if (GetCondition (destReg)) {
 				StackPush (PC);
+				printf ("From 0x%04x: ", PC - 1);
 				PC = WorkAddr;
+				printf ("Calling 0x%02x (Cond)\n", PC);
 			}
 			break;
 		case 5:
 			if (destReg & 1) { // CALL
-				StackPush (PC);
+				printf ("From 0x%04x: ", PC - 1);
+				StackPush (PC + 2);
 				PC = GetInstructionLBHB();
 				printf ("Calling 0x%02x\n", PC);
 			} else { // PUSH RP
