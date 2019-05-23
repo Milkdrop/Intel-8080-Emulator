@@ -73,6 +73,8 @@ int main(int argc, char** argv) {
 
 	bool quit = false;
 	uint32_t LastDraw = 0;
+	uint32_t LastDebug = 0;
+	uint32_t LastClock = 0;
 	uint32_t CurrentTime = 0;
 	const uint8_t *keyboard = SDL_GetKeyboardState(NULL);
 	uint8_t Press0 = 0;
@@ -86,6 +88,10 @@ int main(int argc, char** argv) {
 			}
 		}
 		
+		CurrentTime = ((float) clock() / CLOCKS_PER_SEC) * 1000; // Get Miliseconds
+		if (LastDraw > CurrentTime) // Overflow
+			LastDraw = 0;
+			
 		if (keyboard[SDL_SCANCODE_0]) {
 			if (Press0 == 0) {
 				Press0 = 1;
@@ -98,20 +104,27 @@ int main(int argc, char** argv) {
 				sort (Benchmark, Benchmark + 256, OpFunc);
 				printf ("Begin Instruction Benchmark Dump:\n");
 				for (int i = 0; i < 256; i++) {
-					printf ("INST ");
-					PrintBinary (Benchmark[i].first);
-					printf (": %d\n", Benchmark[i].second);
+					if (Benchmark[i].second != 0) {
+						printf ("INST ");
+						PrintBinary (Benchmark[i].first);
+						printf (": %d\n", Benchmark[i].second);
+					}
 				}
+				
+				uint32_t MsPassed = CurrentTime - LastDebug;
+				uint32_t INSTPassed = cpu.ClockCount - LastClock;
+				LastDebug = CurrentTime;
+				printf ("Executed %d INST in %dms\n", INSTPassed, MsPassed);
+				printf ("Speed: %f INST/s\n", INSTPassed * ((float) 1000 / MsPassed));
+				LastClock = cpu.ClockCount;
 			}
 		} else
 			Press0 = 0;
 			
-		CurrentTime = ((float) clock() / CLOCKS_PER_SEC) * 1000; // Get Miliseconds
-		if (LastDraw > CurrentTime) // Overflow
-			LastDraw = 0;
-			
 		cpu.Clock();
+		
 		if (CurrentTime - LastDraw > 1000 / 60) { // 60 FPS
+			LastDraw = CurrentTime;
 			Disp.Update (mmu.VRAM, 256, 224);
 		}
 	}

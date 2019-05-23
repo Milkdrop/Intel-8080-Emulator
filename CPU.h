@@ -7,9 +7,9 @@ class CPU {
 	public:
 		CPU (MMU* _mmu, uint16_t _ClockSpeed);
 		void Clock ();
+		uint32_t ClockCount;
 		uint32_t Benchmark[256];
 	private:
-		uint32_t ClockCount;
 		uint16_t ClockSpeed;
 		MMU* mmu;
 		
@@ -20,8 +20,8 @@ class CPU {
 		uint32_t WorkValue;
 
 		uint8_t reg_A;
-		uint16_t reg_M;
-
+		uint8_t* ptr_reg_A;
+		uint8_t* reg_M;
 		uint16_t reg_BC;
 		uint8_t* reg_B = ((uint8_t*) &reg_BC) + 1;
 		uint8_t* reg_C = ((uint8_t*) &reg_BC);
@@ -31,7 +31,11 @@ class CPU {
 		uint16_t reg_HL;
 		uint8_t* reg_H = ((uint8_t*) &reg_HL) + 1;
 		uint8_t* reg_L = ((uint8_t*) &reg_HL);
-
+		
+		uint8_t** RegMap[8]; // Hack for reg_M
+		uint16_t* RegPairMap[4];
+		uint8_t* FlagMap[4];
+		
 		uint16_t SP;
 		uint16_t PC;
 
@@ -45,10 +49,7 @@ class CPU {
 		void ResetFlags ();
 		void SetFlagsAdd (uint8_t OpA, uint16_t OpB, uint8_t setCarry);
 		void SetFlagsSub (uint8_t OpA, uint16_t OpB, uint8_t setCarry);
-		uint8_t GetCondition (uint8_t ID);
 		uint8_t* GetReg (uint8_t ID);
-		uint16_t* GetRegPair (uint8_t ID);
-		uint16_t GetInstructionLBHB ();
 		void StackPush (uint16_t Value);
 		uint16_t StackPop ();
 		void PushPSW ();
