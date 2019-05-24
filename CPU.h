@@ -51,7 +51,7 @@ class CPU {
 		uint8_t flag_C; // Carry
 		uint8_t flag_AC; // Auxiliar Carry
 		
-		void ResetFlags ();
+		void ResetFlags (uint8_t SetCarry);
 		void SetFlagsAdd (uint8_t OpA, uint16_t OpB, uint8_t setCarry);
 		void SetFlagsSub (uint8_t OpA, uint16_t OpB, uint8_t setCarry);
 		uint8_t* GetReg (uint8_t ID);

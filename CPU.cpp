@@ -59,7 +59,7 @@ CPU::CPU (MMU* _mmu, uint16_t _ClockSpeed) {
 	reg_HL = 0;
 	SP = 0;
 	PC = 0;
-	ResetFlags ();
+	ResetFlags (1);
 }
 
 inline void Unknown (uint8_t Instruction) {
@@ -70,19 +70,23 @@ inline void Unimplemented (std::string Name) {
 	fprintf (stderr, "Unimplemented Instruction: %s\n", Name.c_str());
 }
 
-inline void CPU::ResetFlags () {
+inline void CPU::ResetFlags (uint8_t SetCarry) {
 	flag_Z = 0;
 	flag_S = 0;
 	flag_P = 0;
-	flag_C = 0;
+	if (SetCarry)
+		flag_C = 0;
 	flag_AC = 0;
 }
 
 inline void CPU::SetFlagsAdd (uint8_t OpA, uint16_t OpB, uint8_t SetCarry) {
-	ResetFlags();
+	if (SetCarry == 2) // Don't reset carry, but set it to 1 if the result of the operation has a carry
+		ResetFlags(0);
+	else
+		ResetFlags(1);
 	uint16_t Result = OpA + OpB;
 
-	if (SetCarry && Result > 0xFF)
+	if (SetCarry == 1 && Result > 0xFF)
 		flag_C = 1;
 	Result &= 0xFF;
 	if (Result == 0)
@@ -91,12 +95,12 @@ inline void CPU::SetFlagsAdd (uint8_t OpA, uint16_t OpB, uint8_t SetCarry) {
 		flag_S = 1;
 	if ((Result & 1) == 0)
 		flag_P = 1;
-	if ((OpA & 8) == 1 && (Result & 16) == 1)
+	if ((OpA & 16) == 1 && (Result & 32) == 1)
 		flag_AC = 1;
 }
 
 inline void CPU::SetFlagsSub (uint8_t OpA, uint16_t OpB, uint8_t SetCarry) {
-	ResetFlags();
+	ResetFlags(1);
 	uint8_t Result = (uint16_t) OpA - OpB;
 
 	if (SetCarry && OpA < OpB)
@@ -107,7 +111,7 @@ inline void CPU::SetFlagsSub (uint8_t OpA, uint16_t OpB, uint8_t SetCarry) {
 		flag_S = 1;
 	if ((Result & 1) == 0)
 		flag_P = 1;
-	if ((OpA & 8) == 1 && (Result & 16) == 1)
+	if ((OpA & 8) == 1 && (Result & 8) == 0)
 		flag_AC = 1;
 }
 
@@ -319,7 +323,7 @@ void CPU::Clock () {
 					WorkValue = 1;
 				else
 					WorkValue = 0;
-
+				
 				reg_A <<= 1;
 				reg_A |= flag_C;
 				flag_C = WorkValue;
@@ -333,10 +337,20 @@ void CPU::Clock () {
 				flag_C = WorkValue;
 				break;
 			case 4: // DAA
-				if ((reg_A & 31) > 9 || flag_AC) {
+				printf ("DAA: ");
+				printf ("0x%02x -> ", reg_A);
+				
+				if ((reg_A & 15) > 9 || flag_AC) {
+					SetFlagsAdd (reg_A, 6, 1);
 					reg_A += 6;
 				}
-				Unimplemented ("DAA");
+				
+				if ((reg_A >> 4) > 9 || flag_C) {
+					SetFlagsAdd (reg_A, 6 << 4, 2);
+					reg_A += 6 << 4;
+				}
+				
+				printf ("0x%02x\n", reg_A);
 				break;
 			case 5: // CMA
 				reg_A ^= 255;
