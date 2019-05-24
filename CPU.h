@@ -11,6 +11,7 @@ class CPU {
 		uint32_t InstructionCount;
 		uint8_t Port[7];
 		uint32_t Benchmark[256];
+		void Debug ();
 	private:
 		uint64_t LastExecutionTime;
 		uint16_t ClockSpeed; // in Hz
@@ -22,6 +23,8 @@ class CPU {
 		uint16_t WorkAddr;
 		uint32_t WorkValue;
 		
+		uint16_t reg_SHIFT;
+		uint8_t ShiftOffset;
 		uint8_t reg_A;
 		uint8_t* ptr_reg_A;
 		uint8_t* reg_M;
@@ -48,7 +51,6 @@ class CPU {
 		uint8_t flag_C; // Carry
 		uint8_t flag_AC; // Auxiliar Carry
 		
-		void Debug ();
 		void ResetFlags ();
 		void SetFlagsAdd (uint8_t OpA, uint16_t OpB, uint8_t setCarry);
 		void SetFlagsSub (uint8_t OpA, uint16_t OpB, uint8_t setCarry);

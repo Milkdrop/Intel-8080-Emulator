@@ -27,6 +27,9 @@ CPU::CPU (MMU* _mmu, uint16_t _ClockSpeed) {
 	
 	memset (Port, 0, sizeof(Port));
 	
+	reg_SHIFT = 0;
+	ShiftOffset = 0;
+	
 	ptr_reg_A = &reg_A;
 	RegMap[0] = &reg_B;
 	RegMap[1] = &reg_C;
@@ -330,6 +333,9 @@ void CPU::Clock () {
 				flag_C = WorkValue;
 				break;
 			case 4: // DAA
+				if ((reg_A & 31) > 9 || flag_AC) {
+					reg_A += 6;
+				}
 				Unimplemented ("DAA");
 				break;
 			case 5: // CMA
@@ -424,14 +430,12 @@ void CPU::Clock () {
 			PC += 2;
 			if (GetCondition (destReg)) {
 				PC = WorkAddr;
-				// printf ("Jumping to 0x%04x (Cond)\n", PC);
 			}
 			break;
 		case 3:
 			switch (destReg) {
 			case 0: // JMP
 				PC = GetInstructionLBHB(PC);
-				// printf ("Jumping to 0x%04x\n", PC);
 				break;
 			case 1:
 				Unknown (Instruction);
@@ -439,14 +443,31 @@ void CPU::Clock () {
 			case 2: // OUT p
 				WorkValue = GetByteAt (PC++);
 				PrintPC = 1;
-				if (WorkValue != 0x06) { // Not Watchdog
+				switch (WorkValue) {
+				case 2:
+					ShiftOffset = reg_A & 7;
+					break;
+				case 4:
+					reg_SHIFT >>= 8;
+					reg_SHIFT |= reg_A * 0x100;
+					//printf ("Shifting in 0x%02x: 0x%04x\n", reg_A, reg_SHIFT);
+					break;
+				case 6: // Watchdog
+					break;
+				default:
 					printf ("Outputting 0x%02x on port 0x%02x\n", reg_A, WorkValue);
 				}
 				break;
 			case 3: // IN p
 				WorkValue = GetByteAt (PC++);
-				reg_A = Port[WorkValue];
-				//printf ("Inputing from port 0x%02x\n", WorkValue);
+				switch (WorkValue) {
+				case 3: // Shift
+					reg_A = (reg_SHIFT >> (8 - ShiftOffset)) & 0xFF;
+					//printf ("Shifting out 0x%02x: 0x%04x / %d\n", reg_A, reg_SHIFT, ShiftOffset);
+					break;
+				default:
+					reg_A = Port[WorkValue];
+				}
 				break;
 			case 4: // XTHL
 				WorkValue = reg_HL;

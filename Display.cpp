@@ -23,16 +23,16 @@ void Display::Update(uint8_t* VRAM) {
 	SDL_RenderClear(main_renderer);
 	SDL_SetRenderDrawColor(main_renderer, 0xFF, 0xFF, 0xFF, 0xFF); // Set white for FG
 
-	for (int y = 0; y < Height; y++) {
-		if (y == Height >> 1)
+	for (int y = 0; y < Width; y++) {
+		if (y == Width >> 1)
 			cpu->Interrupt (0);
 		
-		for (int x = 0; x < Width; x += 8) {
-			uint8_t VRAMByte = VRAM [y * (Width >> 3) + (x >> 3)];
+		for (int x = 0; x < Height; x += 8) {
+			uint8_t VRAMByte = VRAM [y * (Height >> 3) + (x >> 3)];
 
 			for (int bit = 0; bit < 8; bit++) {
 				if (((VRAMByte >> bit) & 1)) {
-					SDL_Rect pixel = {((x & 0xF8) + bit) * PixelSize, y * PixelSize, PixelSize, PixelSize};
+					SDL_Rect pixel = {y * PixelSize, (Height - 1 - (x + bit)) * PixelSize, PixelSize, PixelSize};
 					SDL_RenderFillRect(main_renderer, &pixel);
 				}
 			}

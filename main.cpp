@@ -4,6 +4,7 @@
 #include <time.h>
 #include <cstring>
 #include <algorithm>
+#include <iostream>
 #include "Display.h"
 #include "MMU.h"
 #include "CPU.h"
@@ -63,7 +64,7 @@ int main(int argc, char** argv) {
 	
 	MMU mmu;
 	CPU cpu(&mmu, 360000);
-	Display Disp("Intel 8080", 256, 224, 2, &cpu);
+	Display Disp("Intel 8080", 224, 256, 2, &cpu);
 	//DisplayDemo(&mmu, 255);
 
 	LoadROMData (&mmu, "Demos/invaders/invaders.h", 0x0000);
@@ -97,6 +98,8 @@ int main(int argc, char** argv) {
 		if (keyboard[SDL_SCANCODE_0]) {
 			if (Press0 == 0) {
 				Press0 = 1;
+				
+				cpu.Debug();
 				std::pair<uint8_t, uint32_t> Benchmark[256];
 				for (int i = 0; i < 256; i++) {
 					Benchmark[i].first = i;
@@ -170,6 +173,7 @@ int main(int argc, char** argv) {
 		
 		// Computations
 		cpu.Clock();
+		
 		if (CurrentTime - LastDraw > 1000 / 60) { // 60 FPS
 			LastDraw = CurrentTime;
 			Disp.Update (mmu.VRAM);
