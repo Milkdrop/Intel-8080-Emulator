@@ -70,7 +70,7 @@ int main(int argc, char** argv) {
 	}
 	
 	MMU* mmu = new MMU();
-	CPU* cpu = new CPU(mmu, 2000);
+	CPU* cpu = new CPU(mmu, 2 << 20);
 	Display Disp("Intel 8080", 224, 256, 2, cpu);
 	//DisplayDemo(&mmu, 255);
 	

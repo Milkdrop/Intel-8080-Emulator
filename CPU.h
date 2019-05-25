@@ -5,11 +5,12 @@
 
 class CPU {
 	public:
-		CPU (MMU* _mmu, uint16_t _ClockSpeed);
+		CPU (MMU* _mmu, uint64_t _MaxClockCountPerSec);
 		void SwitchToConsoleMode ();
 		void Clock ();
 		void Interrupt (uint8_t ID);
 		uint32_t InstructionCount;
+		uint64_t ClockCount;
 		uint8_t Port[7];
 		uint32_t Benchmark[256];
 		void Debug ();
@@ -18,8 +19,7 @@ class CPU {
 		MMU* mmu;
 	
 		// Timing
-		uint64_t LastExecutionTime;
-		uint16_t ClockSpeed; // in kHz
+		uint64_t MaxClockCountPerSec;
 		
 		// Status
 		uint8_t InterruptsEnabled;
