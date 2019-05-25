@@ -30,16 +30,23 @@ void DisplayDemo (MMU* mmu, uint8_t number) {
 
 void LoadROMData (MMU* mmu, std::string Filename, uint16_t Address) {
 	FILE* ROMData;
-	uint16_t ROMSize = 0x800;
-	uint8_t Buffer[0x800];
 
-	ROMData = fopen(Filename.c_str(), "rb");
+	ROMData = fopen (Filename.c_str(), "rb");
 	if (ROMData == 0)
 		OpenFileError (Filename);
+	
+	fseek (ROMData, 0, SEEK_END);
+    uint16_t ROMSize = ftell (ROMData);
+    fclose (ROMData);
+	ROMData = fopen (Filename.c_str(), "rb");
+	
+	uint8_t* Buffer = (uint8_t*) malloc(ROMSize);
+	
 	if (fread(Buffer, 1, ROMSize, ROMData) != ROMSize)
 		OpenFileError (Filename);
 
 	mmu->LoadInMemory (Buffer, Address, ROMSize);
+	free (Buffer);
 }
 
 void PrintBinary (uint8_t Value) {
@@ -58,27 +65,46 @@ bool OpFunc(std::pair<uint8_t, uint32_t> A, std::pair<uint8_t, uint32_t> B) {
 
 int main(int argc, char** argv) {
 	if (SDL_Init (SDL_INIT_EVERYTHING) < 0) {
-		fprintf(stderr, "SDL failed to initialize: %s", SDL_GetError());
+		fprintf (stderr, "SDL failed to initialize: %s", SDL_GetError());
 		return 1;
 	}
 	
-	MMU mmu;
-	CPU cpu(&mmu, 360000);
-	Display Disp("Intel 8080", 224, 256, 2, &cpu);
+	MMU* mmu = new MMU();
+	CPU* cpu = new CPU(mmu, 2000);
+	Display Disp("Intel 8080", 224, 256, 2, cpu);
 	//DisplayDemo(&mmu, 255);
-
-	LoadROMData (&mmu, "Demos/invaders/invaders.h", 0x0000);
-	LoadROMData (&mmu, "Demos/invaders/invaders.g", 0x0800);
-	LoadROMData (&mmu, "Demos/invaders/invaders.f", 0x1000);
-	LoadROMData (&mmu, "Demos/invaders/invaders.e", 0x1800);
+	
+	if (argc != 3) {
+		fprintf (stderr, "Please specify -ROMType ROMFileName:\n");
+		fprintf (stderr, "\t- %s -g Demos/invaders/invadersfull\t// For Games, input the entire 8K ROM\n", argv[0]);
+		fprintf (stderr, "\t- %s -p Demos/CPUTEST.COM\t\t\t// For Programs\n", argv[0]);
+		exit (1);
+	}
+	
+	if (strcmp(argv[1], "-g") == 0) {
+		LoadROMData (mmu, argv[2], 0x0000);
+		/*
+		LoadROMData (&mmu, "Demos/invaders/invaders.g", 0x0800);
+		LoadROMData (&mmu, "Demos/invaders/invaders.f", 0x1000);
+		LoadROMData (&mmu, "Demos/invaders/invaders.e", 0x1800);
+		*/
+	} else if (strcmp(argv[1], "-p") == 0) {
+		LoadROMData (mmu, argv[2], 0x0100);
+		cpu->SwitchToConsoleMode ();
+	}
 	
 	bool quit = false;
+	bool DrawFull = false;
+	bool StepMode = false;
 	uint32_t LastDraw = 0;
 	uint32_t LastDebug = 0;
 	uint32_t LastInstructionCount = 0;
 	uint32_t CurrentTime = 0;
 	const uint8_t *keyboard = SDL_GetKeyboardState(NULL);
 	uint8_t Press0 = 0;
+	uint8_t PressActivateStep = 0;
+	uint8_t PressStep = 0;
+	uint8_t Step = 0;
 	
 	SDL_Event ev;
 	
@@ -99,11 +125,11 @@ int main(int argc, char** argv) {
 			if (Press0 == 0) {
 				Press0 = 1;
 				
-				cpu.Debug();
+				cpu->Debug();
 				std::pair<uint8_t, uint32_t> Benchmark[256];
 				for (int i = 0; i < 256; i++) {
 					Benchmark[i].first = i;
-					Benchmark[i].second = cpu.Benchmark[i];
+					Benchmark[i].second = cpu->Benchmark[i];
 				}
 				
 				sort (Benchmark, Benchmark + 256, OpFunc);
@@ -117,66 +143,103 @@ int main(int argc, char** argv) {
 				}
 				
 				uint32_t MsPassed = CurrentTime - LastDebug;
-				uint32_t INSTPassed = cpu.InstructionCount - LastInstructionCount;
+				uint32_t INSTPassed = cpu->InstructionCount - LastInstructionCount;
 				LastDebug = CurrentTime;
 				printf ("Executed %d INST in %dms\n", INSTPassed, MsPassed);
 				printf ("Speed: %f INST/s\n", INSTPassed * ((float) 1000 / MsPassed));
-				LastInstructionCount = cpu.InstructionCount;
+				LastInstructionCount = cpu->InstructionCount;
 			}
 		} else
 			Press0 = 0;
 		
+		if (keyboard[SDL_SCANCODE_ESCAPE]) {
+			if (PressActivateStep == 0) {
+				PressActivateStep = 1;
+				StepMode = !StepMode;
+				
+				if (StepMode)
+					printf ("Debug Stepping Activated. Press TAB to move to the next instruction\n");
+				else
+					printf ("Debug Stepping Deactivated.\n");
+			}
+		} else
+			PressActivateStep = 0;
+		
+		if (StepMode) {
+			if (keyboard[SDL_SCANCODE_TAB]) {
+				if (PressStep == 0) {
+					PressStep = 1;
+					Step = 1;
+				}
+			} else
+				PressStep = 0;
+		}
 		// Port Setting
-		memset (cpu.Port, 0, sizeof(cpu.Port));
+		memset (cpu->Port, 0, sizeof(cpu->Port));
 		
 		// Always on bits
-		cpu.Port[0] |= 1 << 1;
-		cpu.Port[0] |= 1 << 2;
-		cpu.Port[0] |= 1 << 3;
-		cpu.Port[1] |= 1 << 3;
+		cpu->Port[0] |= 1 << 1;
+		cpu->Port[0] |= 1 << 2;
+		cpu->Port[0] |= 1 << 3;
+		cpu->Port[1] |= 1 << 3;
 		
 		if (keyboard[SDL_SCANCODE_SPACE]) { // P1 Fire
-			cpu.Port[0] |= 1 << 4;
-			cpu.Port[1] |= 1 << 4;
+			cpu->Port[0] |= 1 << 4;
+			cpu->Port[1] |= 1 << 4;
 		}
 		
 		if (keyboard[SDL_SCANCODE_A]) { // P1 Left
-			cpu.Port[0] |= 1 << 5;
-			cpu.Port[1] |= 1 << 5;
+			cpu->Port[0] |= 1 << 5;
+			cpu->Port[1] |= 1 << 5;
 		}
 		
 		if (keyboard[SDL_SCANCODE_D]) { // P1 Right
-			cpu.Port[0] |= 1 << 6;
-			cpu.Port[1] |= 1 << 6;
+			cpu->Port[0] |= 1 << 6;
+			cpu->Port[1] |= 1 << 6;
 		}
 		
 		if (keyboard[SDL_SCANCODE_UP]) // P2 Fire
-			cpu.Port[2] |= 1 << 4;
+			cpu->Port[2] |= 1 << 4;
 		
 		if (keyboard[SDL_SCANCODE_LEFT]) // P2 Left
-			cpu.Port[2] |= 1 << 5;
+			cpu->Port[2] |= 1 << 5;
 			
 		if (keyboard[SDL_SCANCODE_RIGHT]) // P2 Right
-			cpu.Port[2] |= 1 << 6;
+			cpu->Port[2] |= 1 << 6;
 			
 		if (keyboard[SDL_SCANCODE_RETURN]) // Credit
-			cpu.Port[1] |= 1 << 0;
+			cpu->Port[1] |= 1 << 0;
 		
 		if (keyboard[SDL_SCANCODE_1]) // 1P Start
-			cpu.Port[1] |= 1 << 2;
+			cpu->Port[1] |= 1 << 2;
 		
 		if (keyboard[SDL_SCANCODE_2]) // 2P Start
-			cpu.Port[1] |= 1 << 1;
+			cpu->Port[1] |= 1 << 1;
 		
 		if (keyboard[SDL_SCANCODE_DELETE]) // Tilt
-			cpu.Port[2] |= 1 << 2;
+			cpu->Port[2] |= 1 << 2;
 		
 		// Computations
-		cpu.Clock();
+		if (!StepMode || (StepMode && Step)) {
+			Step = 0;
+			cpu->Clock();
+			
+			if (StepMode)
+				cpu->Debug();
+		}
 		
-		if (CurrentTime - LastDraw > 1000 / 60) { // 60 FPS
+		if (CurrentTime - LastDraw > 1000 / 120) { // 60 FPS
 			LastDraw = CurrentTime;
-			Disp.Update (mmu.VRAM);
+			
+			if (DrawFull) {
+				Disp.Update (mmu->VRAM);
+				if (!StepMode)
+					cpu->Interrupt (1);
+			} else {
+				if (!StepMode)
+					cpu->Interrupt (0);
+			}
+			DrawFull = !DrawFull;
 		}
 	}
 }

@@ -6,6 +6,7 @@
 class CPU {
 	public:
 		CPU (MMU* _mmu, uint16_t _ClockSpeed);
+		void SwitchToConsoleMode ();
 		void Clock ();
 		void Interrupt (uint8_t ID);
 		uint32_t InstructionCount;
@@ -13,18 +14,24 @@ class CPU {
 		uint32_t Benchmark[256];
 		void Debug ();
 	private:
-		uint64_t LastExecutionTime;
-		uint16_t ClockSpeed; // in Hz
+		// Memory
 		MMU* mmu;
+	
+		// Timing
+		uint64_t LastExecutionTime;
+		uint16_t ClockSpeed; // in kHz
 		
+		// Status
 		uint8_t InterruptsEnabled;
 		uint8_t Halt;
+		uint8_t ConsoleMode;
 		
+		// Work Vars
 		uint16_t WorkValue;
-		
 		uint16_t reg_SHIFT;
 		uint8_t ShiftOffset;
 		
+		// Registers
 		uint8_t* reg_M;
 		uint8_t true_reg_A;
 		uint8_t* reg_A = &true_reg_A;
@@ -32,7 +39,7 @@ class CPU {
 		uint8_t* reg_B = ((uint8_t*) &reg_BC) + 1;
 		uint8_t* reg_C = ((uint8_t*) &reg_BC);
 		uint16_t reg_DE;
-		uint8_t* reg_D = ((uint8_t*) &reg_DE);
+		uint8_t* reg_D = ((uint8_t*) &reg_DE) + 1;
 		uint8_t* reg_E = ((uint8_t*) &reg_DE);
 		uint16_t reg_HL;
 		uint8_t* reg_H = ((uint8_t*) &reg_HL) + 1;
@@ -41,6 +48,7 @@ class CPU {
 		uint16_t SP;
 		uint16_t PC;
 
+		// Flags
 		uint8_t flag_Z; // Zero
 		uint8_t flag_S; // Sign
 		uint8_t flag_P; // Parity
@@ -52,14 +60,17 @@ class CPU {
 		void ResetFlags (uint8_t SetCarry);
 		void SetFlagsAdd (uint8_t OpA, uint16_t OpB, uint8_t setCarry);
 		void SetFlagsSub (uint8_t OpA, uint16_t OpB, uint8_t setCarry);
-		uint8_t* GetReg (uint8_t ID);
-		void SetByteAt (uint16_t Address, uint8_t Value);
 		uint8_t GetByteAt (uint16_t Address);
-		uint16_t GetInstructionLBHB ();
+		uint16_t GetWordAt (uint16_t Address);
+		void SetByteAt (uint16_t Address, uint8_t Value);
+		void SetWordAt (uint16_t Address, uint16_t Value);
 		void StackPush (uint16_t Value);
 		uint16_t StackPop ();
 		void PushPSW ();
 		void PopPSW ();
+	
+		//Syscalls
+		void Syscall5 ();
 };
 
 #endif
