@@ -94,17 +94,19 @@ inline void CPU::ResetFlags (uint8_t SetCarry) {
 	flag_Z = 0;
 	flag_S = 0;
 	flag_P = 0;
-	if (SetCarry == 1)
+	if (SetCarry != 0)
 		flag_C = 0;
-	flag_AC = 0;
+	if (SetCarry != 2)
+		flag_AC = 0;
 }
 
 inline void CPU::SetFlagsAdd (uint8_t OpA, uint16_t OpB, uint8_t SetCarry) {
+	// SetCarry = 0 - AC, 1 - C and AC, 2 - C
 	ResetFlags(SetCarry);
 	
 	uint16_t Result = OpA + OpB;
 
-	if (SetCarry == 1 && Result > 0xFF)
+	if (SetCarry != 0 && Result > 0xFF)
 		flag_C = 1;
 	Result &= 0xFF;
 	if (Result == 0)
@@ -120,12 +122,13 @@ inline void CPU::SetFlagsAdd (uint8_t OpA, uint16_t OpB, uint8_t SetCarry) {
 	if ((Bit1Count & 1) == 0)
 		flag_P = 1;
 	
-	if ((OpA & 8) == 8 && (Result & 8) == 0)
+	if (SetCarry != 2 && ((OpA & 8) == 8 || (OpB & 8) == 8) && (Result & 8) == 0) {
 		flag_AC = 1;
+	}
 }
 
 inline void CPU::SetFlagsSub (uint8_t OpA, uint16_t OpB, uint8_t SetCarry) {
-	ResetFlags(1);
+	ResetFlags(SetCarry);
 	uint8_t Result = OpA - OpB;
 
 	if (SetCarry && OpA < OpB)
@@ -143,7 +146,7 @@ inline void CPU::SetFlagsSub (uint8_t OpA, uint16_t OpB, uint8_t SetCarry) {
 	if ((Bit1Count & 1) == 0)
 		flag_P = 1;
 	
-	if ((OpA & 8) == 8 && (Result & 8) == 0)
+	if (SetCarry != 2 && ((OpA & 8) == 8 || (OpB & 8) == 8) && (Result & 8) == 0)
 		flag_AC = 1;
 }
 
@@ -227,6 +230,9 @@ void CPU::Interrupt (uint8_t ID) {
 		return;
 	}
 	
+	Execute (0b11110011); // Disable Interrupts. By analyzing the code, it appears they are
+						  // automatically re-enabled after the INT has finished
+	
 	switch (ID) {
 		case 0: // Mid Screen - RST 1
 			Execute (0b11001111);
@@ -243,7 +249,7 @@ void CPU::Clock () {
 	InstructionCount++;
 	uint8_t Instruction = GetByteAt (PC);
 	//ClockCount += OpcodeCycleCount [Instruction];
-	Benchmark[Instruction]++;
+	//Benchmark[Instruction]++;
 	
 	PC++;
 	Execute (Instruction);
@@ -331,7 +337,7 @@ inline void CPU::Execute (uint8_t Instruction) {
 		case 0b00100010: WorkValue = GetWordAt (PC); PC += 2; SetByteAt (WorkValue, *reg_L); SetByteAt (WorkValue + 1, *reg_H); break; // SHLD
 		case 0b00101010: WorkValue = GetWordAt (PC); PC += 2; *reg_L = GetByteAt(WorkValue); *reg_H = GetByteAt (WorkValue + 1); break; // LHLD
 			
-		case 0b00100111: if ((*reg_A & 0xF) > 9 || flag_AC) {SetFlagsAdd (*reg_A, 6, 1); *reg_A += 6;} if ((*reg_A >> 4) > 9 || flag_C) {SetFlagsAdd (*reg_A, 6 << 4, 1); *reg_A += 6 << 4;} break; // DAA
+		case 0b00100111: if ((*reg_A & 0xF) > 9 || flag_AC) {SetFlagsAdd (*reg_A, 6, 0); *reg_A += 0x06;} if ((*reg_A >> 4) > 9 || flag_C) {*reg_A += 0x60; SetFlagsAdd (*reg_A, 0, 1);} break; // DAA
 			
 		case 0b00101111: *reg_A = ~*reg_A; break; // CMA
 		case 0b00111111: flag_C = 1 - flag_C; break; // CMC

@@ -71,8 +71,7 @@ int main(int argc, char** argv) {
 	
 	MMU* mmu = new MMU();
 	CPU* cpu = new CPU(mmu, 2 << 20);
-	Display Disp("Intel 8080", 224, 256, 2, cpu);
-	//DisplayDemo(&mmu, 255);
+	Display Disp("Intel 8080", 224, 256, 2);
 	
 	if (argc != 3) {
 		fprintf (stderr, "Please specify -ROMType ROMFileName:\n");
@@ -93,7 +92,6 @@ int main(int argc, char** argv) {
 		cpu->SwitchToConsoleMode ();
 	}
 	
-	bool quit = false;
 	bool DrawFull = false;
 	bool StepMode = false;
 	uint32_t LastDraw = 0;
@@ -105,13 +103,14 @@ int main(int argc, char** argv) {
 	uint8_t PressActivateStep = 0;
 	uint8_t PressStep = 0;
 	uint8_t Step = 0;
-	
 	SDL_Event ev;
+	uint8_t quit = 0;
+	
 	
 	while (!quit) {
 		while (SDL_PollEvent(&ev)) {
 			if (ev.type == SDL_QUIT) {
-				quit = true;
+				quit = 1;
 			}
 		}
 		
@@ -183,29 +182,23 @@ int main(int argc, char** argv) {
 		cpu->Port[0] |= 1 << 3;
 		cpu->Port[1] |= 1 << 3;
 		
-		if (keyboard[SDL_SCANCODE_SPACE]) { // P1 Fire
+		if (keyboard[SDL_SCANCODE_SPACE]) { // Fire
 			cpu->Port[0] |= 1 << 4;
 			cpu->Port[1] |= 1 << 4;
+			cpu->Port[2] |= 1 << 4; // P2
 		}
 		
-		if (keyboard[SDL_SCANCODE_A]) { // P1 Left
+		if (keyboard[SDL_SCANCODE_A]) { // Left
 			cpu->Port[0] |= 1 << 5;
 			cpu->Port[1] |= 1 << 5;
+			cpu->Port[2] |= 1 << 5; // P2
 		}
 		
 		if (keyboard[SDL_SCANCODE_D]) { // P1 Right
 			cpu->Port[0] |= 1 << 6;
 			cpu->Port[1] |= 1 << 6;
+			cpu->Port[2] |= 1 << 6; // P2
 		}
-		
-		if (keyboard[SDL_SCANCODE_UP]) // P2 Fire
-			cpu->Port[2] |= 1 << 4;
-		
-		if (keyboard[SDL_SCANCODE_LEFT]) // P2 Left
-			cpu->Port[2] |= 1 << 5;
-			
-		if (keyboard[SDL_SCANCODE_RIGHT]) // P2 Right
-			cpu->Port[2] |= 1 << 6;
 			
 		if (keyboard[SDL_SCANCODE_RETURN]) // Credit
 			cpu->Port[1] |= 1 << 0;
@@ -228,7 +221,7 @@ int main(int argc, char** argv) {
 				cpu->Debug();
 		}
 		
-		if (CurrentTime - LastDraw > 1000 / 120) { // 60 FPS
+		if (CurrentTime - LastDraw > 1000 / 120) { // 60 Hz
 			LastDraw = CurrentTime;
 			
 			if (DrawFull) {
