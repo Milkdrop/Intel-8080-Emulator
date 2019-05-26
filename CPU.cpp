@@ -180,13 +180,13 @@ void CPU::Debug () {
 	printf ("\n");
 }
 
-void CPU::StackPush (uint16_t Value) {
+inline void CPU::StackPush (uint16_t Value) {
 	SP -= 2;
 	SetWordAt (SP, Value);
 	//printf ("Pushing on Stack: 0x%04x: 0x%02x / 0x%04x: 0x%02x\n", SP - 1, Value & 0xFF, SP - 2, Value >> 8);
 }
 
-uint16_t CPU::StackPop () {
+inline uint16_t CPU::StackPop () {
 	uint16_t Value = GetWordAt (SP);
 	//printf ("Popping from Stack: 0x%04x: 0x%02x / 0x%04x: 0x%02x = ", SP, GetByteAt (SP), SP + 1, GetByteAt (SP + 1));
 	//printf ("0x%04x\n", Value);
@@ -194,7 +194,7 @@ uint16_t CPU::StackPop () {
 	return Value;
 }
 
-void CPU::PushPSW () {
+inline void CPU::PushPSW () {
 	uint16_t PSW = ((uint16_t) *reg_A) << 8;
 	PSW |= flag_C;
 	PSW |= 1 << 1;
@@ -240,13 +240,9 @@ void CPU::Clock () {
 	if (Halt)
 		return;
 	
-	//if (ClockCount > MaxClockCountPerSec)
-	//	return;
-	
 	InstructionCount++;
-	
 	uint8_t Instruction = GetByteAt (PC);
-	ClockCount += OpcodeCycleCount [Instruction];
+	//ClockCount += OpcodeCycleCount [Instruction];
 	Benchmark[Instruction]++;
 	
 	PC++;

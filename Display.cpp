@@ -21,10 +21,16 @@ Display::Display (std::string Name, uint16_t _Width, uint16_t _Height, uint16_t 
 void Display::Update(uint8_t* VRAM) {
 	SDL_SetRenderDrawColor(main_renderer, 0x00, 0x00, 0x00, 0x00); // Set black for BG
 	SDL_RenderClear(main_renderer);
-	SDL_SetRenderDrawColor(main_renderer, 0xFF, 0xFF, 0xFF, 0xFF); // Set white for FG
 	
 	for (int y = 0; y < Width; y++) {
 		for (int x = 0; x < Height; x += 8) {
+			if (x <= 73)
+				SDL_SetRenderDrawColor(main_renderer, 0x00, 0xFF, 0x00, 0xFF); // Green
+			else if (x > Height - 64 && x < Height - 33)
+				SDL_SetRenderDrawColor(main_renderer, 0xFF, 0x00, 0x00, 0xFF); // Red
+			else
+				SDL_SetRenderDrawColor(main_renderer, 0xFF, 0xFF, 0xFF, 0xFF); // Set white for FG
+			
 			uint8_t VRAMByte = VRAM [y * (Height >> 3) + (x >> 3)];
 			
 			for (int bit = 0; bit < 8; bit++) {
