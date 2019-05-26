@@ -3,19 +3,22 @@
 #include <string.h>
 #include "CPU.h"
 
-CPU::CPU (MMU* _mmu, uint64_t _MaxClockCountPerSec) {
+CPU::CPU (MMU* _mmu, uint8_t _ConsoleMode) {
+	ConsoleMode = _ConsoleMode;
 	ClockCount = 0;
 	InstructionCount = 0;
-	MaxClockCountPerSec = _MaxClockCountPerSec;
 	mmu = _mmu;
 	
 	memset (Port, 0, sizeof(Port));
 	
 	reg_SHIFT = 0;
 	ShiftOffset = 0;
+	InvalidRead = 0;
+	InvalidWrite = 0;
 	
 	memset (Benchmark, 0, sizeof(uint32_t) * 256);
 	InterruptsEnabled = 0;
+	Debugging = 0;
 	Halt = 0;
 	true_reg_A = 0;
 	reg_BC = 0;
@@ -24,6 +27,13 @@ CPU::CPU (MMU* _mmu, uint64_t _MaxClockCountPerSec) {
 	SP = 0x2400;
 	PC = 0;
 	ResetFlags (1);
+	
+	if (ConsoleMode) {
+		PC = 0x100;
+		SetByteAt (0x5, 0b11001001); // Place RET for Syscall
+		SetByteAt (0x6, 0xFF); // LB Available RAM
+		SetByteAt (0x7, 0xFF); // HB Available RAM
+	}
 }
 
 const uint8_t OpcodeCycleCount[] = {
@@ -54,12 +64,7 @@ inline void CPU::Syscall5 () {
 			printf ("%c", GetByteAt (i));	
 		}
 	}
-}
-
-void CPU::SwitchToConsoleMode () {
-	ConsoleMode = 1;
-	PC = 0x100;
-	SetByteAt (0x5, 0b11001001); // Place RET for Syscall
+	fflush(stdout);
 }
 
 inline void CPU::Unknown (uint8_t Instruction) {
@@ -69,23 +74,41 @@ inline void CPU::Unknown (uint8_t Instruction) {
 }
 
 inline uint8_t CPU::GetByteAt (uint16_t Address) {
+	if (Address >= 0x4400 && ConsoleMode == 0) {
+		Debugging = 0;
+		printf ("Reading invalid Address: 0x%04x\n", Address);
+		return 0;
+	}
 	return *(mmu->MemoryMap[Address]);
 }
 
 inline void CPU::SetByteAt (uint16_t Address, uint8_t Value) {
 	//printf ("Writing at 0x%04x: 0x%02x\n", Address, Value);
-	if (Address < 0x2000) {
+	if ((Address < 0x2000 || Address >= 0x4400) && ConsoleMode == 0) {
+		Debugging = 0;
 		printf ("Writing to Weird Address: 0x%04x\n", Address);
-		Halt = true;
+		return;
 	}
+	
 	*(mmu->MemoryMap[Address]) = Value;
 }
 
 inline uint16_t CPU::GetWordAt (uint16_t Address) {
+	if (Address >= 0x4400 && ConsoleMode == 0) {
+		Debugging = 0;
+		printf ("Reading invalid Address: 0x%04x (Word)\n", Address);
+		return 0;
+	}
+	
 	return GetByteAt(Address) | (GetByteAt (Address + 1) << 8);
 }
 
 inline void CPU::SetWordAt (uint16_t Address, uint16_t Value) {
+	if ((Address < 0x2000 || Address >= 0x4400) && ConsoleMode == 0) {
+		Debugging = 0;
+		printf ("Writing to Weird Address: 0x%04x (Word)\n", Address);
+		return;
+	}
 	SetByteAt (Address, Value & 0xFF);
 	SetByteAt (Address + 1, Value >> 8);
 }
@@ -101,12 +124,12 @@ inline void CPU::ResetFlags (uint8_t SetCarry) {
 }
 
 inline void CPU::SetFlagsAdd (uint8_t OpA, uint16_t OpB, uint8_t SetCarry) {
-	// SetCarry = 0 - AC, 1 - C and AC, 2 - C
+	// SetCarry = 0 - AC, 1 - C and AC, 2 - C, 3 None
 	ResetFlags(SetCarry);
 	
 	uint16_t Result = OpA + OpB;
 
-	if (SetCarry != 0 && Result > 0xFF)
+	if (SetCarry != 3 && SetCarry != 0 && Result > 0xFF)
 		flag_C = 1;
 	Result &= 0xFF;
 	if (Result == 0)
@@ -122,7 +145,7 @@ inline void CPU::SetFlagsAdd (uint8_t OpA, uint16_t OpB, uint8_t SetCarry) {
 	if ((Bit1Count & 1) == 0)
 		flag_P = 1;
 	
-	if (SetCarry != 2 && ((OpA & 8) == 8 || (OpB & 8) == 8) && (Result & 8) == 0) {
+	if (SetCarry != 3 && SetCarry != 2 && ((OpA & 8) == 8 || (OpB & 8) == 8) && (Result & 8) == 0) {
 		flag_AC = 1;
 	}
 }
@@ -131,7 +154,7 @@ inline void CPU::SetFlagsSub (uint8_t OpA, uint16_t OpB, uint8_t SetCarry) {
 	ResetFlags(SetCarry);
 	uint8_t Result = OpA - OpB;
 
-	if (SetCarry && OpA < OpB)
+	if (SetCarry != 3 && SetCarry != 0 && OpA < OpB)
 		flag_C = 1;
 	if (Result == 0)
 		flag_Z = 1;
@@ -146,7 +169,7 @@ inline void CPU::SetFlagsSub (uint8_t OpA, uint16_t OpB, uint8_t SetCarry) {
 	if ((Bit1Count & 1) == 0)
 		flag_P = 1;
 	
-	if (SetCarry != 2 && ((OpA & 8) == 8 || (OpB & 8) == 8) && (Result & 8) == 0)
+	if (SetCarry != 3 && SetCarry != 2 && ((OpA & 8) == 8 || (OpB & 8) == 8) && (Result & 8) == 0)
 		flag_AC = 1;
 }
 
@@ -186,6 +209,9 @@ void CPU::Debug () {
 inline void CPU::StackPush (uint16_t Value) {
 	SP -= 2;
 	SetWordAt (SP, Value);
+	if (SP < 0x2300 && ConsoleMode == 0) {
+		printf ("Stack Dangerously Low\n");
+	}
 	//printf ("Pushing on Stack: 0x%04x: 0x%02x / 0x%04x: 0x%02x\n", SP - 1, Value & 0xFF, SP - 2, Value >> 8);
 }
 
@@ -222,12 +248,16 @@ void CPU::PopPSW () {
 }
 
 void CPU::Interrupt (uint8_t ID) {
-	if (!InterruptsEnabled)
+	if (!InterruptsEnabled || ConsoleMode == 1)
 		return;
 	
 	if (Halt) {
 		printf ("CPU is HALTed.\n");
 		return;
+	}
+	
+	if (Debugging) {
+		printf ("Interrupt: %d\n", ID);	
 	}
 	
 	Execute (0b11110011); // Disable Interrupts. By analyzing the code, it appears they are
@@ -249,28 +279,38 @@ void CPU::Clock () {
 	InstructionCount++;
 	uint8_t Instruction = GetByteAt (PC);
 	//ClockCount += OpcodeCycleCount [Instruction];
-	//Benchmark[Instruction]++;
+	Benchmark[Instruction]++;
 	
 	PC++;
 	Execute (Instruction);
 }
 
 inline void CPU::Execute (uint8_t Instruction) {
-	//printf ("INST 0x%04x 0x%02x\n", PC, Instruction);
-	
-	if (PC > 0x2000) {
-		printf ("Uh\n");
-		Debug();
-		Halt = true;
-		return;
+	if (Debugging) {
+		//printf ("INST 0x%04x 0x%02x / ", PC - 1, Instruction);
+		//printf ("M: 0x%04x\n", reg_HL);
 	}
 	
-	if (reg_HL < 0x4400)
+	if (reg_HL < 0x4400) {
 		reg_M = mmu->MemoryMap [reg_HL];
+		InvalidRead = 0;
+		InvalidWrite = 0;
+		
+		//if (reg_HL < 0x500)
+		//	InvalidWrite = 1;
+	} else {
+		InvalidRead = 1;
+		InvalidWrite = 1;
+	}
 	
 	if (ConsoleMode) {
-		if (PC == 0x5) {
+		if (PC == 0x1) {
+			Halt = true;
+		}
+		
+		if (PC == 0x6) {
 			Syscall5 ();
+			//Debugging = 1;
 		}
 	}
 	
@@ -337,7 +377,7 @@ inline void CPU::Execute (uint8_t Instruction) {
 		case 0b00100010: WorkValue = GetWordAt (PC); PC += 2; SetByteAt (WorkValue, *reg_L); SetByteAt (WorkValue + 1, *reg_H); break; // SHLD
 		case 0b00101010: WorkValue = GetWordAt (PC); PC += 2; *reg_L = GetByteAt(WorkValue); *reg_H = GetByteAt (WorkValue + 1); break; // LHLD
 			
-		case 0b00100111: if ((*reg_A & 0xF) > 9 || flag_AC) {SetFlagsAdd (*reg_A, 6, 0); *reg_A += 0x06;} if ((*reg_A >> 4) > 9 || flag_C) {*reg_A += 0x60; SetFlagsAdd (*reg_A, 0, 1);} break; // DAA
+		case 0b00100111: if ((*reg_A & 0xF) > 9 || flag_AC) {SetFlagsAdd (*reg_A, 6, 0); *reg_A += 0x06;} if ((*reg_A >> 4) > 9 || flag_C) {SetFlagsAdd (*reg_A, 0x60, 1); *reg_A += 0x60;} break; // DAA
 			
 		case 0b00101111: *reg_A = ~*reg_A; break; // CMA
 		case 0b00111111: flag_C = 1 - flag_C; break; // CMC
@@ -422,15 +462,15 @@ inline void CPU::Execute (uint8_t Instruction) {
 		case 0b10000111: SetFlagsAdd (*reg_A, *reg_A, 1); *reg_A += *reg_A; break; // ADD S
 		case 0b11000110: SetFlagsAdd (*reg_A, GetByteAt (PC), 1); *reg_A += GetByteAt (PC++); break; // ADI #
 			
-		case 0b10001000: WorkValue = *reg_B + flag_C; SetFlagsAdd (*reg_A, WorkValue, 1); *reg_A += WorkValue; break; // ADC S
-		case 0b10001001: WorkValue = *reg_C + flag_C; SetFlagsAdd (*reg_A, WorkValue, 1); *reg_A += WorkValue; break; // ADC S
-		case 0b10001010: WorkValue = *reg_D + flag_C; SetFlagsAdd (*reg_A, WorkValue, 1); *reg_A += WorkValue; break; // ADC S
-		case 0b10001011: WorkValue = *reg_E + flag_C; SetFlagsAdd (*reg_A, WorkValue, 1); *reg_A += WorkValue; break; // ADC S
-		case 0b10001100: WorkValue = *reg_H + flag_C; SetFlagsAdd (*reg_A, WorkValue, 1); *reg_A += WorkValue; break; // ADC S
-		case 0b10001101: WorkValue = *reg_L + flag_C; SetFlagsAdd (*reg_A, WorkValue, 1); *reg_A += WorkValue; break; // ADC S
-		case 0b10001110: WorkValue = *reg_M + flag_C; SetFlagsAdd (*reg_A, WorkValue, 1); *reg_A += WorkValue; break; // ADC S
-		case 0b10001111: WorkValue = *reg_A + flag_C; SetFlagsAdd (*reg_A, WorkValue, 1); *reg_A += WorkValue; break; // ADC S
-		case 0b11001110: WorkValue = GetByteAt (PC++) + flag_C; SetFlagsAdd (*reg_A, WorkValue, 1); *reg_A += WorkValue; break; // ACI #
+		case 0b10001000: WorkValue = uint16_t(*reg_B) + flag_C; SetFlagsAdd (*reg_A, WorkValue, 1); *reg_A += WorkValue; break; // ADC S
+		case 0b10001001: WorkValue = uint16_t(*reg_C) + flag_C; SetFlagsAdd (*reg_A, WorkValue, 1); *reg_A += WorkValue; break; // ADC S
+		case 0b10001010: WorkValue = uint16_t(*reg_D) + flag_C; SetFlagsAdd (*reg_A, WorkValue, 1); *reg_A += WorkValue; break; // ADC S
+		case 0b10001011: WorkValue = uint16_t(*reg_E) + flag_C; SetFlagsAdd (*reg_A, WorkValue, 1); *reg_A += WorkValue; break; // ADC S
+		case 0b10001100: WorkValue = uint16_t(*reg_H) + flag_C; SetFlagsAdd (*reg_A, WorkValue, 1); *reg_A += WorkValue; break; // ADC S
+		case 0b10001101: WorkValue = uint16_t(*reg_L) + flag_C; SetFlagsAdd (*reg_A, WorkValue, 1); *reg_A += WorkValue; break; // ADC S
+		case 0b10001110: WorkValue = uint16_t(*reg_M) + flag_C; SetFlagsAdd (*reg_A, WorkValue, 1); *reg_A += WorkValue; break; // ADC S
+		case 0b10001111: WorkValue = uint16_t(*reg_A) + flag_C; SetFlagsAdd (*reg_A, WorkValue, 1); *reg_A += WorkValue; break; // ADC S
+		case 0b11001110: WorkValue = uint16_t(GetByteAt (PC++)) + flag_C; SetFlagsAdd (*reg_A, WorkValue, 1); *reg_A += WorkValue; break; // ACI #
 			
 		case 0b10010000: SetFlagsSub (*reg_A, *reg_B, 1); *reg_A -= *reg_B; break; // SUB S
 		case 0b10010001: SetFlagsSub (*reg_A, *reg_C, 1); *reg_A -= *reg_C; break; // SUB S
@@ -442,15 +482,15 @@ inline void CPU::Execute (uint8_t Instruction) {
 		case 0b10010111: SetFlagsSub (*reg_A, *reg_A, 1); *reg_A -= *reg_A; break; // SUB S
 		case 0b11010110: SetFlagsSub (*reg_A, GetByteAt (PC), 1); *reg_A -= GetByteAt (PC++); break; // SUI #
 			
-		case 0b10011000: WorkValue = *reg_B + flag_C; SetFlagsSub (*reg_A, WorkValue, 1); *reg_A -= WorkValue; break; // SBB S
-		case 0b10011001: WorkValue = *reg_C + flag_C; SetFlagsSub (*reg_A, WorkValue, 1); *reg_A -= WorkValue; break; // SBB S
-		case 0b10011010: WorkValue = *reg_D + flag_C; SetFlagsSub (*reg_A, WorkValue, 1); *reg_A -= WorkValue; break; // SBB S
-		case 0b10011011: WorkValue = *reg_E + flag_C; SetFlagsSub (*reg_A, WorkValue, 1); *reg_A -= WorkValue; break; // SBB S
-		case 0b10011100: WorkValue = *reg_H + flag_C; SetFlagsSub (*reg_A, WorkValue, 1); *reg_A -= WorkValue; break; // SBB S
-		case 0b10011101: WorkValue = *reg_L + flag_C; SetFlagsSub (*reg_A, WorkValue, 1); *reg_A -= WorkValue; break; // SBB S
-		case 0b10011110: WorkValue = *reg_M + flag_C; SetFlagsSub (*reg_A, WorkValue, 1); *reg_A -= WorkValue; break; // SBB S
-		case 0b10011111: WorkValue = *reg_A + flag_C; SetFlagsSub (*reg_A, WorkValue, 1); *reg_A -= WorkValue; break; // SBB S
-		case 0b11011110: WorkValue = GetByteAt (PC++) + flag_C; SetFlagsSub (*reg_A, WorkValue, 1); *reg_A -= WorkValue; break; // SBI #
+		case 0b10011000: WorkValue = uint16_t(*reg_B) + flag_C; SetFlagsSub (*reg_A, WorkValue, 1); *reg_A -= WorkValue; break; // SBB S
+		case 0b10011001: WorkValue = uint16_t(*reg_C) + flag_C; SetFlagsSub (*reg_A, WorkValue, 1); *reg_A -= WorkValue; break; // SBB S
+		case 0b10011010: WorkValue = uint16_t(*reg_D) + flag_C; SetFlagsSub (*reg_A, WorkValue, 1); *reg_A -= WorkValue; break; // SBB S
+		case 0b10011011: WorkValue = uint16_t(*reg_E) + flag_C; SetFlagsSub (*reg_A, WorkValue, 1); *reg_A -= WorkValue; break; // SBB S
+		case 0b10011100: WorkValue = uint16_t(*reg_H) + flag_C; SetFlagsSub (*reg_A, WorkValue, 1); *reg_A -= WorkValue; break; // SBB S
+		case 0b10011101: WorkValue = uint16_t(*reg_L) + flag_C; SetFlagsSub (*reg_A, WorkValue, 1); *reg_A -= WorkValue; break; // SBB S
+		case 0b10011110: WorkValue = uint16_t(*reg_M) + flag_C; SetFlagsSub (*reg_A, WorkValue, 1); *reg_A -= WorkValue; break; // SBB S
+		case 0b10011111: WorkValue = uint16_t(*reg_A) + flag_C; SetFlagsSub (*reg_A, WorkValue, 1); *reg_A -= WorkValue; break; // SBB S
+		case 0b11011110: WorkValue = uint16_t(GetByteAt (PC++)) + flag_C; SetFlagsSub (*reg_A, WorkValue, 1); *reg_A -= WorkValue; break; // SBI #
 			
 		case 0b10100000: *reg_A &= *reg_B; SetFlagsAdd (*reg_A, 0, 1); break; // ANA S
 		case 0b10100001: *reg_A &= *reg_C; SetFlagsAdd (*reg_A, 0, 1); break; // ANA S
@@ -460,27 +500,27 @@ inline void CPU::Execute (uint8_t Instruction) {
 		case 0b10100101: *reg_A &= *reg_L; SetFlagsAdd (*reg_A, 0, 1); break; // ANA S
 		case 0b10100110: *reg_A &= *reg_M; SetFlagsAdd (*reg_A, 0, 1); break; // ANA S
 		case 0b10100111: *reg_A &= *reg_A; SetFlagsAdd (*reg_A, 0, 1); break; // ANA S
-		case 0b11100110: *reg_A &= GetByteAt (PC++); SetFlagsAdd (*reg_A, 0, 1); break; // ANI #
+		case 0b11100110: *reg_A &= GetByteAt (PC++); SetFlagsAdd (*reg_A, 0, 3); break; // ANI #
 			
-		case 0b10101000: *reg_A ^= *reg_B; SetFlagsAdd (*reg_A, 0, 1); break; // XRA S
-		case 0b10101001: *reg_A ^= *reg_C; SetFlagsAdd (*reg_A, 0, 1); break; // XRA S
-		case 0b10101010: *reg_A ^= *reg_D; SetFlagsAdd (*reg_A, 0, 1); break; // XRA S
-		case 0b10101011: *reg_A ^= *reg_E; SetFlagsAdd (*reg_A, 0, 1); break; // XRA S
-		case 0b10101100: *reg_A ^= *reg_H; SetFlagsAdd (*reg_A, 0, 1); break; // XRA S
-		case 0b10101101: *reg_A ^= *reg_L; SetFlagsAdd (*reg_A, 0, 1); break; // XRA S
-		case 0b10101110: *reg_A ^= *reg_M; SetFlagsAdd (*reg_A, 0, 1); break; // XRA S
-		case 0b10101111: *reg_A ^= *reg_A; SetFlagsAdd (*reg_A, 0, 1); break; // XRA S
-		case 0b11101110: *reg_A ^= GetByteAt (PC++); SetFlagsAdd (*reg_A, 0, 1); break; // XRI #
+		case 0b10101000: *reg_A ^= *reg_B; SetFlagsAdd (*reg_A, 0, 3); break; // XRA S
+		case 0b10101001: *reg_A ^= *reg_C; SetFlagsAdd (*reg_A, 0, 3); break; // XRA S
+		case 0b10101010: *reg_A ^= *reg_D; SetFlagsAdd (*reg_A, 0, 3); break; // XRA S
+		case 0b10101011: *reg_A ^= *reg_E; SetFlagsAdd (*reg_A, 0, 3); break; // XRA S
+		case 0b10101100: *reg_A ^= *reg_H; SetFlagsAdd (*reg_A, 0, 3); break; // XRA S
+		case 0b10101101: *reg_A ^= *reg_L; SetFlagsAdd (*reg_A, 0, 3); break; // XRA S
+		case 0b10101110: *reg_A ^= *reg_M; SetFlagsAdd (*reg_A, 0, 3); break; // XRA S
+		case 0b10101111: *reg_A ^= *reg_A; SetFlagsAdd (*reg_A, 0, 3); break; // XRA S
+		case 0b11101110: *reg_A ^= GetByteAt (PC++); SetFlagsAdd (*reg_A, 0, 3); break; // XRI #
 			
-		case 0b10110000: *reg_A |= *reg_B; SetFlagsAdd (*reg_A, 0, 1); break; // ORA S
-		case 0b10110001: *reg_A |= *reg_C; SetFlagsAdd (*reg_A, 0, 1); break; // ORA S
-		case 0b10110010: *reg_A |= *reg_D; SetFlagsAdd (*reg_A, 0, 1); break; // ORA S
-		case 0b10110011: *reg_A |= *reg_E; SetFlagsAdd (*reg_A, 0, 1); break; // ORA S
-		case 0b10110100: *reg_A |= *reg_H; SetFlagsAdd (*reg_A, 0, 1); break; // ORA S
-		case 0b10110101: *reg_A |= *reg_L; SetFlagsAdd (*reg_A, 0, 1); break; // ORA S
-		case 0b10110110: *reg_A |= *reg_M; SetFlagsAdd (*reg_A, 0, 1); break; // ORA S
-		case 0b10110111: *reg_A |= *reg_A; SetFlagsAdd (*reg_A, 0, 1); break; // ORA S
-		case 0b11110110: *reg_A |= GetByteAt (PC++); SetFlagsAdd (*reg_A, 0, 1); break; // ORI #
+		case 0b10110000: *reg_A |= *reg_B; SetFlagsAdd (*reg_A, 0, 3); break; // ORA S
+		case 0b10110001: *reg_A |= *reg_C; SetFlagsAdd (*reg_A, 0, 3); break; // ORA S
+		case 0b10110010: *reg_A |= *reg_D; SetFlagsAdd (*reg_A, 0, 3); break; // ORA S
+		case 0b10110011: *reg_A |= *reg_E; SetFlagsAdd (*reg_A, 0, 3); break; // ORA S
+		case 0b10110100: *reg_A |= *reg_H; SetFlagsAdd (*reg_A, 0, 3); break; // ORA S
+		case 0b10110101: *reg_A |= *reg_L; SetFlagsAdd (*reg_A, 0, 3); break; // ORA S
+		case 0b10110110: *reg_A |= *reg_M; SetFlagsAdd (*reg_A, 0, 3); break; // ORA S
+		case 0b10110111: *reg_A |= *reg_A; SetFlagsAdd (*reg_A, 0, 3); break; // ORA S
+		case 0b11110110: *reg_A |= GetByteAt (PC++); SetFlagsAdd (*reg_A, 0, 3); break; // ORI #
 			
 		case 0b10111000: SetFlagsSub (*reg_A, *reg_B, 1); break; // CMP S
 		case 0b10111001: SetFlagsSub (*reg_A, *reg_C, 1); break; // CMP S
@@ -547,8 +587,8 @@ inline void CPU::Execute (uint8_t Instruction) {
 		case 0b11100011: WorkValue = StackPop(); StackPush (reg_HL); reg_HL = WorkValue; break; // XTHL
 		case 0b11101011: WorkValue = reg_DE; reg_DE = reg_HL; reg_HL = WorkValue; break; // XCHG
 			
-		case 0b11110011: InterruptsEnabled = 0; break;
-		case 0b11111011: InterruptsEnabled = 1; break;
+		case 0b11110011: InterruptsEnabled = 0; break; // DI
+		case 0b11111011: InterruptsEnabled = 1; break; // EI
 			
 		case 0b11101001: PC = reg_HL; break; // PCHL
 		case 0b11111001: SP = reg_HL; break; // SPHL

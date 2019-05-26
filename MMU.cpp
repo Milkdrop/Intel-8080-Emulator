@@ -2,15 +2,21 @@
 #include <stdio.h>
 #include "MMU.h"
 
-MMU::MMU() {
+MMU::MMU(uint8_t ConsoleMode) {
 	memset (Memory, 0, sizeof(Memory));
 	
 	for (int i = 0x0000; i < 0x4000; i++) { // ROM + RAM + VRAM
 		MemoryMap[i] = Memory + i;
 	}
 	
-	for (int i = 0x4000; i < 0x4400; i++) { // Mirrored RAM
-		MemoryMap[i] = Memory + i - 0x2000;
+	if (!ConsoleMode) {
+		for (int i = 0x4000; i < 0x4400; i++) { // Mirrored RAM
+			MemoryMap[i] = Memory + i - 0x2000;
+		}
+	} else {
+		for (int i = 0x4000; i <= 0xFFFF; i++) { // Mirrored RAM
+			MemoryMap[i] = Memory + i;
+		}
 	}
 }
 

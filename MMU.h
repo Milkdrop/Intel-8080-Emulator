@@ -4,7 +4,7 @@
 
 class MMU {
 	public: // Good for direct access - it's faster
-		MMU();
+		MMU(uint8_t ConsoleMode);
 
 		// Memory Layout
 		/*
@@ -22,10 +22,10 @@ class MMU {
 		// Convenience Pointers
 		uint8_t* VRAM = Memory + 0x2400;
 
-		uint8_t* MemoryMap[0x4400];
+		uint8_t* MemoryMap[65536]; // 64K
 		void LoadInMemory (uint8_t* Buffer, uint16_t Address, int BufferSize);
 	private:
-		uint8_t Memory[0x4000];
+		uint8_t Memory[65536];
 };
 
 #endif
