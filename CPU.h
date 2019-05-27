@@ -35,6 +35,14 @@ class CPU {
 		uint8_t ShiftOffset;
 		
 		// Registers
+		union Register16 {
+			struct {
+				uint8_t low;
+				uint8_t high;
+			} part;
+			uint16_t value;
+		};
+	
 		uint8_t* reg_M;
 		uint8_t true_reg_A;
 		uint8_t* reg_A = &true_reg_A;
