@@ -10,24 +10,17 @@ class CPU {
 		void Interrupt (uint8_t ID);
 		uint32_t InstructionCount;
 		uint8_t Port[7];
-		uint32_t Benchmark[256];
 		uint8_t Debugging;
 		void Debug ();
 		uint16_t PC;
 	private:
 		// Memory
 		MMU* mmu;
-	
-		// Timing
-		uint64_t ClockCount;
-		uint64_t MaxClockCountPerSec;
 		
 		// Status
 		uint8_t InterruptsEnabled;
 		uint8_t Halt;
 		uint8_t ConsoleMode;
-		uint8_t InvalidRead;
-		uint8_t InvalidWrite;
 	
 		// Work Vars
 		uint16_t WorkValue;
@@ -40,21 +33,14 @@ class CPU {
 				uint8_t low;
 				uint8_t high;
 			} part;
-			uint16_t value;
+			uint16_t whole;
 		};
 	
+		uint8_t reg_A;
 		uint8_t* reg_M;
-		uint8_t true_reg_A;
-		uint8_t* reg_A = &true_reg_A;
-		uint16_t reg_BC;
-		uint8_t* reg_B = ((uint8_t*) &reg_BC) + 1;
-		uint8_t* reg_C = ((uint8_t*) &reg_BC);
-		uint16_t reg_DE;
-		uint8_t* reg_D = ((uint8_t*) &reg_DE) + 1;
-		uint8_t* reg_E = ((uint8_t*) &reg_DE);
-		uint16_t reg_HL;
-		uint8_t* reg_H = ((uint8_t*) &reg_HL) + 1;
-		uint8_t* reg_L = ((uint8_t*) &reg_HL);
+		Register16 reg_BC;
+		Register16 reg_DE;
+		Register16 reg_HL;
 		
 		uint16_t SP;
 

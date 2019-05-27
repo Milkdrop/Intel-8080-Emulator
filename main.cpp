@@ -87,7 +87,6 @@ int main(int argc, char** argv) {
 		cpu = new CPU(mmu, 0);
 		LoadROMData (mmu, argv[2], 0x0000);
 		SDLEventDelay = 1000 / 120; // 60 Hz
-		Disp = new Display("Intel 8080", 224, 256, 2);
 	} else if (strcmp(argv[1], "-p") == 0) {
 		mmu = new MMU (1);
 		cpu = new CPU(mmu, 1);
@@ -95,6 +94,8 @@ int main(int argc, char** argv) {
 		ConsoleMode = 1;
 		SDLEventDelay = 1000; // 1 Hz - For Debugging
 	}
+	
+	Disp = new Display("Intel 8080", 224, 256, 2);
 	
 	bool DrawFull = false;
 	uint8_t StepMode = 0;
@@ -138,7 +139,7 @@ int main(int argc, char** argv) {
 				Press0 = 1;
 				
 				cpu->Debug();
-				std::pair<uint8_t, uint32_t> Benchmark[256];
+				/*std::pair<uint8_t, uint32_t> Benchmark[256];
 				for (int i = 0; i < 256; i++) {
 					Benchmark[i].first = i;
 					Benchmark[i].second = cpu->Benchmark[i];
@@ -152,7 +153,7 @@ int main(int argc, char** argv) {
 						PrintBinary (Benchmark[i].first);
 						printf (": %d\n", Benchmark[i].second);
 					}
-				}
+				}*/
 				
 				uint32_t MsPassed = CurrentTime - LastDebug;
 				uint32_t INSTPassed = cpu->InstructionCount - LastInstructionCount;
@@ -232,8 +233,6 @@ int main(int argc, char** argv) {
 		// CPU Clock
 		if (!StepMode || (StepMode && Step)) {
 			Step = 0;
-			//if (cpu->PC == 0x05BA && false) // Breakpoint
-			//	StepMode = 1;
 			cpu->Clock();
 			
 			if (StepMode)
