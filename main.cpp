@@ -77,25 +77,29 @@ int main(int argc, char** argv) {
 	}
 	
 	uint8_t ConsoleMode = 0;
+	uint16_t SDLEventDelay = 0;
 	MMU* mmu = NULL;
 	CPU* cpu = NULL;
+	Display* Disp = NULL;
 	
 	if (strcmp(argv[1], "-g") == 0) {
 		mmu = new MMU (0);
 		cpu = new CPU(mmu, 0);
 		LoadROMData (mmu, argv[2], 0x0000);
+		SDLEventDelay = 1000 / 120; // 60 Hz
+		Disp = new Display("Intel 8080", 224, 256, 2);
 	} else if (strcmp(argv[1], "-p") == 0) {
 		mmu = new MMU (1);
 		cpu = new CPU(mmu, 1);
 		LoadROMData (mmu, argv[2], 0x0100);
 		ConsoleMode = 1;
+		SDLEventDelay = 1000; // 1 Hz - For Debugging
 	}
-	
-	Display Disp("Intel 8080", 224, 256, 2);
 	
 	bool DrawFull = false;
 	uint8_t StepMode = 0;
 	uint32_t LastDraw = 0;
+	uint32_t LastSDLEvent = 0;
 	uint32_t LastDebug = 0;
 	uint32_t LastInstructionCount = 0;
 	uint32_t CurrentTime = 0;
@@ -111,11 +115,16 @@ int main(int argc, char** argv) {
 	while (!quit) {
 		// Time Checking
 		CurrentTime = ((float) clock() / CLOCKS_PER_SEC) * 1000; // Get Miliseconds
-		if (LastDraw > CurrentTime) // Overflow Protection
+		
+		// Overflow Protection
+		if (LastDraw > CurrentTime)
 			LastDraw = 0;
-	
-		if (CurrentTime - LastDraw > 1000) {
-			LastDraw = CurrentTime;
+		if (LastSDLEvent > CurrentTime)
+			LastSDLEvent = 0;
+		
+		// SDL Events
+		if (CurrentTime - LastSDLEvent > SDLEventDelay) {
+			LastSDLEvent = CurrentTime;
 			while (SDL_PollEvent(&ev)) {
 				if (ev.type == SDL_QUIT) {
 					quit = 1;
@@ -179,10 +188,10 @@ int main(int argc, char** argv) {
 				PressStep = 0;
 		}
 		
-		// Port Setting
+		// Port Set
 		memset (cpu->Port, 0, sizeof(cpu->Port));
 		
-		// Always on bits
+		// Always-on port bits
 		cpu->Port[0] |= 1 << 1;
 		cpu->Port[0] |= 1 << 2;
 		cpu->Port[0] |= 1 << 3;
@@ -220,7 +229,7 @@ int main(int argc, char** argv) {
 				cpu->Port[2] |= 1 << 2;
 		}
 		
-		// Computations
+		// CPU Clock
 		if (!StepMode || (StepMode && Step)) {
 			Step = 0;
 			//if (cpu->PC == 0x05BA && false) // Breakpoint
@@ -231,11 +240,12 @@ int main(int argc, char** argv) {
 				cpu->Debug();
 		}
 		
+		// Screen Drawing + Screen Interrupts
 		if (!ConsoleMode && CurrentTime - LastDraw > 1000 / 120) { // 60 Hz
 			LastDraw = CurrentTime;
 			
 			if (DrawFull) {
-				Disp.Update (mmu->VRAM);
+				Disp->Update (mmu->VRAM);
 				if (!StepMode)
 					cpu->Interrupt (1);
 			} else {
