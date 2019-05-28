@@ -233,6 +233,8 @@ int main(int argc, char** argv) {
 		// CPU Clock
 		if (!StepMode || (StepMode && Step)) {
 			Step = 0;
+			//if (cpu->PC == 0x5AD)
+			//	StepMode = 1;
 			cpu->Clock();
 			
 			if (StepMode)

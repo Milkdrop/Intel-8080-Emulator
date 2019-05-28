@@ -3,6 +3,8 @@
 #include <string.h>
 #include "CPU.h"
 
+uint8_t flagZSP[0x100];
+
 CPU::CPU (MMU* _mmu, uint8_t _ConsoleMode) {
 	ConsoleMode = _ConsoleMode;
 	InstructionCount = 0;
@@ -34,6 +36,19 @@ CPU::CPU (MMU* _mmu, uint8_t _ConsoleMode) {
 		SetByteAt (0x5, 0b11001001); // Place RET for Syscall
 		SetByteAt (0x6, 0xFF); // LB Available RAM
 		SetByteAt (0x7, 0xFF); // HB Available RAM
+	}
+	
+	// Precalculate ZSP
+	for (int i = 0; i <= 0xFF; i++) {
+		flagZSP[i] = (i == 0); // 0 Z
+		flagZSP[i] |= ((i & 128) == 128) << 1; // 1 S
+		
+		uint8_t Bit1Count = 0;
+		for (int k = 0; k < 8; k++)
+			if (((i >> k) & 1) == 1)
+				Bit1Count++;
+		
+		flagZSP[i] |= ((Bit1Count & 1) == 0) << 2; // 2 P
 	}
 }
 
@@ -123,21 +138,16 @@ inline void CPU::SetFlagsAdd (uint8_t OpA, uint16_t OpB, uint8_t SetCarry) {
 		flag_C = Result > 0xFF;
 	
 	Result &= 0xFF;
-	flag_Z = (Result == 0);
-	flag_S = (Result & 128) == 128;
+	flag_Z = (flagZSP[Result] >> 0) & 1;
+	flag_S = (flagZSP[Result] >> 1) & 1;
+	flag_P = (flagZSP[Result] >> 2) & 1;
 	
-	// Calculate Parity
-	uint8_t Bit1Count = 0;
-	for (int i = 0; i < 8; i++) {
-		if (((Result >> i) & 1) == 1)
-			Bit1Count++;
-	}
+	if (SetCarry == 0 || SetCarry == 1)
+		flag_AC = ((Result ^ OpA ^ OpB) & 0x10) == 0x10;
 	
-	flag_P = (Bit1Count & 1) == 0;
-	
-	if (SetCarry == 0 || SetCarry == 1) {
-		Result = (OpA & 0xF) + (OpB & 0xF);
-		flag_AC = Result > 0xF;
+	if (SetCarry == 3) {
+		flag_C = 0;
+		flag_AC = 0;
 	}
 }
 
@@ -147,20 +157,33 @@ inline void CPU::SetFlagsSub (uint8_t OpA, uint16_t OpB, uint8_t SetCarry) {
 	if (SetCarry == 1 || SetCarry == 2)
 		flag_C = OpA < OpB;
 	
-	flag_Z = (Result == 0);
-	flag_S = (Result & 128) == 128;
-	
-	// Calculate Parity
-	uint8_t Bit1Count = 0;
-	for (int i = 0; i < 8; i++) {
-		if (((Result >> i) & 1) == 1)
-			Bit1Count++;
-	}
-	
-	flag_P = (Bit1Count & 1) == 0;
+	flag_Z = (flagZSP[Result] >> 0) & 1;
+	flag_S = (flagZSP[Result] >> 1) & 1;
+	flag_P = (flagZSP[Result] >> 2) & 1;
 	
 	if (SetCarry == 0 || SetCarry == 1) {
-		flag_AC = (int8_t) (OpA & 0xF) - (OpB & 0xF) < 0;
+		//printf ("INST 0x%02x: Doing sub: %d %d %d\n", *mmu->MemoryMap[PC - 1], OpA, OpB, SetCarry);
+		flag_AC = ((Result ^ OpA ^ (~OpB + 1)) & 0x10) == 0x10;
+	}
+	
+	if (SetCarry == 3) {
+		flag_C = 0;
+		flag_AC = 0;
+	}
+}
+
+inline void CPU::SetFlagsDirect (uint8_t OpA, uint8_t OpB, uint16_t Result, uint8_t SetCarry) {
+	flag_Z = (flagZSP[Result] >> 0) & 1;
+	flag_S = (flagZSP[Result] >> 1) & 1;
+	flag_P = (flagZSP[Result] >> 2) & 1;
+	
+	if (SetCarry == 0 || SetCarry == 1) {
+		flag_AC = ((OpA | OpB) & 0x08) == 0x08;
+	}
+	
+	if (SetCarry == 3) {
+		flag_C = 0;
+		flag_AC = 0;
 	}
 }
 
@@ -357,7 +380,7 @@ inline void CPU::Execute (uint8_t Instruction) {
 		case 0b00100010: SetWordAt (GetWordAt (PC), reg_HL.whole); PC += 2; break; // SHLD
 		case 0b00101010: reg_HL.whole = GetWordAt (GetWordAt (PC)); PC += 2; break; // LHLD
 			
-		case 0b00100111: if ((reg_A & 0xF) > 9 || flag_AC) {SetFlagsAdd (reg_A, 6, 0); reg_A += 0x06;} if ((reg_A >> 4) > 9 || flag_C) {SetFlagsAdd (reg_A, 0x60, 1); reg_A += 0x60;} break; // DAA
+		case 0b00100111: if ((reg_A & 0xF) > 9 || flag_AC) {SetFlagsAdd (reg_A, 0x06, 0); reg_A += 0x06;} if ((reg_A >> 4) > 9 || flag_C) {SetFlagsAdd (reg_A, 0x60, 1); reg_A += 0x60;} break; // DAA
 			
 		case 0b00101111: reg_A = ~reg_A; break; // CMA
 		case 0b00111111: flag_C = 1 - flag_C; break; // CMC
@@ -472,15 +495,15 @@ inline void CPU::Execute (uint8_t Instruction) {
 		case 0b10011111: WorkValue = uint16_t(reg_A) + flag_C; SetFlagsSub (reg_A, WorkValue, 1); reg_A -= WorkValue; break; // SBB S
 		case 0b11011110: WorkValue = uint16_t(GetByteAt (PC++)) + flag_C; SetFlagsSub (reg_A, WorkValue, 1); reg_A -= WorkValue; break; // SBI #
 			
-		case 0b10100000: reg_A &= reg_BC.part.high; SetFlagsAdd (reg_A, 0, 1); break; // ANA S
-		case 0b10100001: reg_A &= reg_BC.part.low; SetFlagsAdd (reg_A, 0, 1); break; // ANA S
-		case 0b10100010: reg_A &= reg_DE.part.high; SetFlagsAdd (reg_A, 0, 1); break; // ANA S
-		case 0b10100011: reg_A &= reg_DE.part.low; SetFlagsAdd (reg_A, 0, 1); break; // ANA S
-		case 0b10100100: reg_A &= reg_HL.part.high; SetFlagsAdd (reg_A, 0, 1); break; // ANA S
-		case 0b10100101: reg_A &= reg_HL.part.low; SetFlagsAdd (reg_A, 0, 1); break; // ANA S
-		case 0b10100110: reg_A &= *reg_M; SetFlagsAdd (reg_A, 0, 1); break; // ANA S
-		case 0b10100111: reg_A &= reg_A; SetFlagsAdd (reg_A, 0, 1); break; // ANA S
-		case 0b11100110: reg_A &= GetByteAt (PC++); SetFlagsAdd (reg_A, 0, 3); break; // ANI #
+		case 0b10100000: flag_C = 0; WorkValue = reg_A & reg_BC.part.high; SetFlagsDirect (reg_A, reg_BC.part.high, WorkValue, 0); reg_A = WorkValue; break; // ANA S
+		case 0b10100001: flag_C = 0; WorkValue = reg_A & reg_BC.part.low; SetFlagsDirect (reg_A, reg_BC.part.low, WorkValue, 0); reg_A = WorkValue; break; // ANA S
+		case 0b10100010: flag_C = 0; WorkValue = reg_A & reg_DE.part.high; SetFlagsDirect (reg_A, reg_DE.part.high, WorkValue, 0); reg_A = WorkValue; break; // ANA S
+		case 0b10100011: flag_C = 0; WorkValue = reg_A & reg_DE.part.low; SetFlagsDirect (reg_A, reg_DE.part.low, WorkValue, 0); reg_A = WorkValue; break; // ANA S
+		case 0b10100100: flag_C = 0; WorkValue = reg_A & reg_HL.part.high; SetFlagsDirect (reg_A, reg_HL.part.high, WorkValue, 0); reg_A = WorkValue; break; // ANA S
+		case 0b10100101: flag_C = 0; WorkValue = reg_A & reg_HL.part.low; SetFlagsDirect (reg_A, reg_HL.part.low, WorkValue, 0); reg_A = WorkValue; break; // ANA S
+		case 0b10100110: flag_C = 0; WorkValue = reg_A & *reg_M; SetFlagsDirect (reg_A, *reg_M, WorkValue, 0); reg_A = WorkValue; break; // ANA S
+		case 0b10100111: flag_C = 0; WorkValue = reg_A & reg_A; SetFlagsDirect (reg_A, reg_A, WorkValue, 0); reg_A = WorkValue; break; // ANA S
+		case 0b11100110: WorkValue = reg_A & GetByteAt(PC); SetFlagsDirect (reg_A, GetByteAt(PC++), WorkValue, 0); reg_A = WorkValue; break; // ANI #
 			
 		case 0b10101000: reg_A ^= reg_BC.part.high; SetFlagsAdd (reg_A, 0, 3); break; // XRA S
 		case 0b10101001: reg_A ^= reg_BC.part.low; SetFlagsAdd (reg_A, 0, 3); break; // XRA S

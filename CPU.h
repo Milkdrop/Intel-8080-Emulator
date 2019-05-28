@@ -56,6 +56,7 @@ class CPU {
 		void ResetFlags (uint8_t SetCarry);
 		void SetFlagsAdd (uint8_t OpA, uint16_t OpB, uint8_t setCarry);
 		void SetFlagsSub (uint8_t OpA, uint16_t OpB, uint8_t setCarry);
+		void SetFlagsDirect (uint8_t OpA, uint8_t OpB, uint16_t Result, uint8_t setCarry);
 		uint8_t GetByteAt (uint16_t Address);
 		uint16_t GetWordAt (uint16_t Address);
 		void SetByteAt (uint16_t Address, uint8_t Value);
