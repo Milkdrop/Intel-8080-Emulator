@@ -57,23 +57,7 @@ int main (int argc, char** argv) {
 	if (ConsoleMode) {
 		LoadROMData (&mmu, argv[2], 0x0100);
 	} else {
-		char* FName = (char*) malloc(strlen(argv[2]) + 2);
-		
-		strcpy(FName, argv[2]);
-		strcat(FName, ".h");
-		LoadROMData (&mmu, FName, 0x0000);
-		
-		strcpy(FName, argv[2]);
-		strcat(FName, ".g");
-		LoadROMData (&mmu, FName, 0x0800);
-		
-		strcpy(FName, argv[2]);
-		strcat(FName, ".f");
-		LoadROMData (&mmu, FName, 0x1000);
-		
-		strcpy(FName, argv[2]);
-		strcat(FName, ".e");
-		LoadROMData (&mmu, FName, 0x1800);
+		LoadROMData (&mmu, argv[2], 0x0000);
 		Disp = new Display("Intel 8080", 224, 256, 2);
 	}
 	
@@ -87,9 +71,6 @@ int main (int argc, char** argv) {
 	uint32_t LastDebugPrint = 0;
 	uint32_t LastInput = 0;
 	uint8_t DrawFull = 0;
-	
-	// Debug input controllers
-	uint8_t PressDebug = 0;
 	
 	printf ("\n");
 	while (!cpu.Halt) {
@@ -150,14 +131,6 @@ int main (int argc, char** argv) {
 
 				if (Keyboard[SDL_SCANCODE_DELETE]) // Tilt
 					cpu.Port[2] |= 1 << 2;
-				
-				if (Keyboard[SDL_SCANCODE_0]) {
-					if (PressDebug == 0) {
-						PressDebug = 1;
-						cpu.Debugging = 1 - cpu.Debugging;
-					}
-				} else
-					PressDebug = 0;
 			}
 			
 			if (CurrentTime - LastDebugPrint > 5000 || LastDebugPrint > CurrentTime) { // 5 Seconds - Manage occasional prints

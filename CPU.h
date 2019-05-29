@@ -15,7 +15,6 @@ class CPU {
 		uint8_t Port[7];
 	
 		// Status
-		uint8_t Debugging;
 		uint8_t InterruptsEnabled;
 		uint8_t Halt;
 		uint64_t ClockCount;
@@ -32,6 +31,7 @@ class CPU {
 		uint16_t WorkValue;
 		
 		// Registers
+		uint8_t* reg_M;
 		uint8_t true_reg_A;
 		uint8_t* reg_A = &true_reg_A; // Pointer uniformity
 	
@@ -52,8 +52,8 @@ class CPU {
 		uint8_t flag_Z; // Zero
 		uint8_t flag_S; // Sign
 		uint8_t flag_P; // Parity
-		bool flag_C; // Carry
-		bool flag_AC; // Auxiliar Carry
+		uint8_t flag_C; // Carry
+		uint8_t flag_AC; // Auxiliar Carry
 	
 		// Functions - Control
 		void Syscall (uint8_t ID);

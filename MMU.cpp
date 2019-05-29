@@ -10,13 +10,11 @@ MMU::MMU(uint8_t ConsoleMode) {
 	}
 	
 	if (!ConsoleMode) {
-		for (int i = 0x4000; i < 0x4400; i++) { // Mirrored RAM
+		for (int i = 0x4000; i < 0x4400; i++) // Mirrored RAM
 			MemoryMap[i] = Memory + i - 0x2000;
-		}
 	} else {
-		for (int i = 0x4000; i <= 0xFFFF; i++) { // Unmirrored
+		for (int i = 0x4000; i <= 0xFFFF; i++) // Unmirrored
 			MemoryMap[i] = Memory + i;
-		}
 	}
 }
 
