@@ -14,7 +14,7 @@ MMU::MMU(uint8_t ConsoleMode) {
 			MemoryMap[i] = Memory + i - 0x2000;
 		}
 	} else {
-		for (int i = 0x4000; i <= 0xFFFF; i++) { // Mirrored RAM
+		for (int i = 0x4000; i <= 0xFFFF; i++) { // Unmirrored
 			MemoryMap[i] = Memory + i;
 		}
 	}

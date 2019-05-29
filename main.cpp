@@ -1,44 +1,26 @@
 #include <stdio.h>
 #include <SDL2/SDL.h>
-#include <string>
 #include <time.h>
-#include <cstring>
-#include <algorithm>
-#include <iostream>
 #include "Display.h"
 #include "MMU.h"
 #include "CPU.h"
 
-void OpenFileError (std::string Filename) {
-	fprintf (stderr, "There was an error opening the file: %s\n", Filename.c_str());
+void OpenFileError (const char* Filename) {
+	fprintf (stderr, "\n[ERR] There was an error opening the file: %s\n", Filename);
 	exit(1);
 }
 
-void DisplayDemo (MMU* mmu, uint8_t number) {
-	for (int i = 0; i < 224; i++) {
-		if (i % 2 == 0) {
-			for (int k = 0; k < 256 >> 3; k += 2) {
-				mmu->VRAM[i * (256 / 8) + k] = number;
-			}
-		} else {
-			for (int k = 1; k < 256 >> 3; k += 2) {
-				mmu->VRAM[i * (256 / 8) + k] = number;
-			}
-		}
-	}
-}
-
-void LoadROMData (MMU* mmu, std::string Filename, uint16_t Address) {
+void LoadROMData (MMU* mmu, const char* Filename, uint16_t Address) {
 	FILE* ROMData;
 
-	ROMData = fopen (Filename.c_str(), "rb");
+	ROMData = fopen (Filename, "rb");
 	if (ROMData == 0)
 		OpenFileError (Filename);
 	
 	fseek (ROMData, 0, SEEK_END);
     uint16_t ROMSize = ftell (ROMData);
     fclose (ROMData);
-	ROMData = fopen (Filename.c_str(), "rb");
+	ROMData = fopen (Filename, "rb");
 	
 	uint8_t* Buffer = (uint8_t*) malloc(ROMSize);
 	
@@ -47,213 +29,122 @@ void LoadROMData (MMU* mmu, std::string Filename, uint16_t Address) {
 
 	mmu->LoadInMemory (Buffer, Address, ROMSize);
 	free (Buffer);
+    fclose (ROMData);
 }
 
-void PrintBinary (uint8_t Value) {
-	for (int i = 0; i < 8; i++) {
-		if (Value & 128)
-			printf ("1");
-		else
-			printf ("0");
-		Value <<= 1;
-	}
-}
-
-bool OpFunc(std::pair<uint8_t, uint32_t> A, std::pair<uint8_t, uint32_t> B) {
-	return A.second < B.second;
-}
-
-int main(int argc, char** argv) {
-	if (SDL_Init (SDL_INIT_EVERYTHING) < 0) {
-		fprintf (stderr, "SDL failed to initialize: %s", SDL_GetError());
+int main (int argc, char** argv) {
+	if (argc != 3) {
+		printf ("Please specify -ROMType ROMFileName:\n");
+		printf ("\t- %s -g Demos/invaders/invadersfull\t\t// For Games, input the entire 8K ROM\n", argv[0]);
+		printf ("\t- %s -p Demos/CPUTEST.COM\t\t\t// For Programs\n", argv[0]);
 		return 1;
 	}
 	
-	if (argc != 3) {
-		fprintf (stderr, "Please specify -ROMType ROMFileName:\n");
-		fprintf (stderr, "\t- %s -g Demos/invaders/invadersfull\t// For Games, input the entire 8K ROM\n", argv[0]);
-		fprintf (stderr, "\t- %s -p Demos/CPUTEST.COM\t\t\t// For Programs\n", argv[0]);
-		exit (1);
+	printf ("[INFO] Initializing SDL...");
+	if (SDL_Init (SDL_INIT_EVERYTHING) < 0) {
+		printf ("\n[ERR] SDL failed to initialize: %s", SDL_GetError());
+		return 1;
 	}
+	printf ("OK\n");
 	
-	uint8_t ConsoleMode = 0;
-	uint16_t SDLEventDelay = 0;
-	MMU* mmu = NULL;
-	CPU* cpu = NULL;
+	const uint8_t ConsoleMode = strcmp(argv[1], "-p") == 0;
+	
+	MMU mmu (ConsoleMode);
+	CPU cpu (&mmu, ConsoleMode);
 	Display* Disp = NULL;
 	
-	if (strcmp(argv[1], "-g") == 0) {
-		mmu = new MMU (0);
-		cpu = new CPU(mmu, 0);
-		LoadROMData (mmu, argv[2], 0x0000);
-		SDLEventDelay = 1000 / 120; // 60 Hz
-	} else if (strcmp(argv[1], "-p") == 0) {
-		mmu = new MMU (1);
-		cpu = new CPU(mmu, 1);
-		LoadROMData (mmu, argv[2], 0x0100);
-		ConsoleMode = 1;
-		SDLEventDelay = 1000; // 1 Hz - For Debugging
+	printf ("[INFO] Reading ROM...");
+	if (ConsoleMode)
+		LoadROMData (&mmu, argv[2], 0x0100);
+	else {
+		LoadROMData (&mmu, argv[2], 0x0000);
+		Disp = new Display("Intel 8080", 224, 256, 2);
 	}
 	
-	Disp = new Display("Intel 8080", 224, 256, 2);
-	
-	bool DrawFull = false;
-	uint8_t StepMode = 0;
-	uint32_t LastDraw = 0;
-	uint32_t LastSDLEvent = 0;
-	uint32_t LastDebug = 0;
-	uint32_t LastInstructionCount = 0;
-	uint32_t CurrentTime = 0;
-	const uint8_t *keyboard = SDL_GetKeyboardState(NULL);
-	uint8_t Press0 = 0;
-	uint8_t PressActivateStep = 0;
-	uint8_t PressStep = 0;
-	uint8_t Step = 0;
+	printf ("OK\n");
 	
 	SDL_Event ev;
-	uint8_t quit = 0;
+	const uint8_t *Keyboard = SDL_GetKeyboardState(NULL);
+	uint32_t CurrentTime = 0;
+	uint32_t LastDraw = 0;
+	uint32_t LastDebugPrint = 0;
+	uint32_t LastInput = 0;
+	uint8_t DrawFull = 0;
 	
-	while (!quit) {
-		// Time Checking
-		CurrentTime = ((float) clock() / CLOCKS_PER_SEC) * 1000; // Get Miliseconds
-		
-		// Overflow Protection
-		if (LastDraw > CurrentTime)
-			LastDraw = 0;
-		if (LastSDLEvent > CurrentTime)
-			LastSDLEvent = 0;
-		
-		// SDL Events
-		if (CurrentTime - LastSDLEvent > SDLEventDelay) {
-			LastSDLEvent = CurrentTime;
-			while (SDL_PollEvent(&ev)) {
-				if (ev.type == SDL_QUIT) {
-					quit = 1;
-				}
-			}
-		}
-	
-		// Debugging Function
-		if (keyboard[SDL_SCANCODE_0]) {
-			if (Press0 == 0) {
-				Press0 = 1;
-				
-				cpu->Debug();
-				/*std::pair<uint8_t, uint32_t> Benchmark[256];
-				for (int i = 0; i < 256; i++) {
-					Benchmark[i].first = i;
-					Benchmark[i].second = cpu->Benchmark[i];
-				}
-				
-				sort (Benchmark, Benchmark + 256, OpFunc);
-				printf ("Begin Instruction Benchmark Dump:\n");
-				for (int i = 0; i < 256; i++) {
-					if (Benchmark[i].second != 0) {
-						printf ("INST ");
-						PrintBinary (Benchmark[i].first);
-						printf (": %d\n", Benchmark[i].second);
-					}
-				}*/
-				
-				uint32_t MsPassed = CurrentTime - LastDebug;
-				uint32_t INSTPassed = cpu->InstructionCount - LastInstructionCount;
-				LastDebug = CurrentTime;
-				printf ("Executed %d INST in %dms\n", INSTPassed, MsPassed);
-				printf ("Speed: %f INST/s\n", INSTPassed * ((float) 1000 / MsPassed));
-				LastInstructionCount = cpu->InstructionCount;
-				cpu->Debugging = 1 - cpu->Debugging;
-			}
-		} else
-			Press0 = 0;
-		
-		if (keyboard[SDL_SCANCODE_ESCAPE]) {
-			if (PressActivateStep == 0) {
-				PressActivateStep = 1;
-				StepMode = 1 - StepMode;
-				
-				if (StepMode)
-					printf ("Debug Stepping Activated. Press TAB to move to the next instruction\n");
-				else
-					printf ("Debug Stepping Deactivated.\n");
-			}
-		} else
-			PressActivateStep = 0;
-		
-		if (StepMode) {
-			if (keyboard[SDL_SCANCODE_TAB]) {
-				if (PressStep == 0) {
-					PressStep = 1;
-					Step = 1;
-				}
-			} else
-				PressStep = 0;
-		}
-		
-		// Port Set
-		memset (cpu->Port, 0, sizeof(cpu->Port));
-		
-		// Always-on port bits
-		cpu->Port[0] |= 1 << 1;
-		cpu->Port[0] |= 1 << 2;
-		cpu->Port[0] |= 1 << 3;
-		cpu->Port[1] |= 1 << 3;
-		
+	printf ("\n");
+	while (!cpu.Halt) {
 		if (!ConsoleMode) {
-			if (keyboard[SDL_SCANCODE_SPACE]) { // Fire
-				cpu->Port[0] |= 1 << 4;
-				cpu->Port[1] |= 1 << 4;
-				cpu->Port[2] |= 1 << 4; // P2
+			CurrentTime = ((float) clock() / CLOCKS_PER_SEC) * 1000; // Get Miliseconds
+
+			if (CurrentTime - LastDraw > 1000 / 120 || LastDraw > CurrentTime) { // 120 Hz - Manage Screen (Half screen in a cycle, then end screen in another)
+				LastDraw = CurrentTime;
+
+				if (DrawFull) {
+					Disp->Update (mmu.VRAM);
+					cpu.Interrupt (1);
+				} else
+					cpu.Interrupt (0);
+				
+				DrawFull = 1 - DrawFull;
 			}
+			
+			if (CurrentTime - LastInput > 1000 / 30 || LastInput > CurrentTime) { // 30 Hz - Manage Events
+				LastInput = CurrentTime;
+				while (SDL_PollEvent(&ev)) {
+					if (ev.type == SDL_QUIT) {
+						cpu.Halt = 1;
+					}
+				}
+				
+				// Cleanup before input
+				cpu.Port[0] &= 0b10001111;
+				cpu.Port[1] &= 0b10001000;
+				cpu.Port[2] &= 0b10001011;
+				
+				if (Keyboard[SDL_SCANCODE_SPACE]) { // Fire
+					cpu.Port[0] |= 1 << 4;
+					cpu.Port[1] |= 1 << 4;
+					cpu.Port[2] |= 1 << 4; // P2
+				}
 
-			if (keyboard[SDL_SCANCODE_A]) { // Left
-				cpu->Port[0] |= 1 << 5;
-				cpu->Port[1] |= 1 << 5;
-				cpu->Port[2] |= 1 << 5; // P2
+				if (Keyboard[SDL_SCANCODE_A]) { // Left
+					cpu.Port[0] |= 1 << 5;
+					cpu.Port[1] |= 1 << 5;
+					cpu.Port[2] |= 1 << 5; // P2
+				}
+
+				if (Keyboard[SDL_SCANCODE_D]) { // P1 Right
+					cpu.Port[0] |= 1 << 6;
+					cpu.Port[1] |= 1 << 6;
+					cpu.Port[2] |= 1 << 6; // P2
+				}
+
+				if (Keyboard[SDL_SCANCODE_RETURN]) // Credit
+					cpu.Port[1] |= 1 << 0;
+
+				if (Keyboard[SDL_SCANCODE_1]) // 1P Start
+					cpu.Port[1] |= 1 << 2;
+
+				if (Keyboard[SDL_SCANCODE_2]) // 2P Start
+					cpu.Port[1] |= 1 << 1;
+
+				if (Keyboard[SDL_SCANCODE_DELETE]) // Tilt
+					cpu.Port[2] |= 1 << 2;
 			}
-
-			if (keyboard[SDL_SCANCODE_D]) { // P1 Right
-				cpu->Port[0] |= 1 << 6;
-				cpu->Port[1] |= 1 << 6;
-				cpu->Port[2] |= 1 << 6; // P2
+			
+			if (CurrentTime - LastDebugPrint > 5000 || LastDebugPrint > CurrentTime) { // 5 Seconds - Manage occasional prints
+				float Duration = (CurrentTime - LastDebugPrint) / 1000;
+				uint64_t ClocksPerSec = cpu.ClockCount / Duration;
+				LastDebugPrint = CurrentTime;
+				printf ("[INFO] Running at @%f MHz (%lu Instructions Per Second)\n", (float) ClocksPerSec / 1000000, (uint64_t) (cpu.InstructionCount / Duration));
+				
+				cpu.ClockCount = 0;
+				cpu.InstructionCount = 0;
 			}
-
-			if (keyboard[SDL_SCANCODE_RETURN]) // Credit
-				cpu->Port[1] |= 1 << 0;
-
-			if (keyboard[SDL_SCANCODE_1]) // 1P Start
-				cpu->Port[1] |= 1 << 2;
-
-			if (keyboard[SDL_SCANCODE_2]) // 2P Start
-				cpu->Port[1] |= 1 << 1;
-
-			if (keyboard[SDL_SCANCODE_DELETE]) // Tilt
-				cpu->Port[2] |= 1 << 2;
 		}
 		
-		// CPU Clock
-		if (!StepMode || (StepMode && Step)) {
-			Step = 0;
-			//if (cpu->PC == 0x5AD)
-			//	StepMode = 1;
-			cpu->Clock();
-			
-			if (StepMode)
-				cpu->Debug();
-		}
-		
-		// Screen Drawing + Screen Interrupts
-		if (!ConsoleMode && CurrentTime - LastDraw > 1000 / 120) { // 60 Hz
-			LastDraw = CurrentTime;
-			
-			if (DrawFull) {
-				Disp->Update (mmu->VRAM);
-				if (!StepMode)
-					cpu->Interrupt (1);
-			} else {
-				if (!StepMode)
-					cpu->Interrupt (0);
-			}
-			DrawFull = !DrawFull;
-		}
+        cpu.Clock();
 	}
+	
+	printf ("\n\n[INFO] CPU Stopped.\n");
 }

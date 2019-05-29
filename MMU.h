@@ -3,8 +3,8 @@
 #define MMU_H
 
 class MMU {
-	public: // Good for direct access - it's faster
-		MMU(uint8_t ConsoleMode);
+	public:
+		MMU (uint8_t ConsoleMode);
 
 		// Memory Layout
 		/*
@@ -20,7 +20,7 @@ class MMU {
 		uint16_t RAMMirrorAddress = 0x4000;
 		
 		// Convenience Pointers
-		uint8_t* VRAM = Memory + 0x2400;
+		uint8_t* VRAM = Memory + VRAMAddress;
 
 		uint8_t* MemoryMap[65536]; // 64K
 		void LoadInMemory (uint8_t* Buffer, uint16_t Address, int BufferSize);
