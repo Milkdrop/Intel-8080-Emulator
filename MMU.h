@@ -21,11 +21,13 @@ class MMU {
 		
 		// Convenience Pointers
 		uint8_t* VRAM = Memory + VRAMAddress;
-
-		uint8_t* MemoryMap[65536]; // 64K
+		uint8_t* JunkAddress = &JunkValue;
+	
+		uint8_t* MemoryMap[0x10000]; // 64K
 		void LoadInMemory (uint8_t* Buffer, uint16_t Address, int BufferSize);
 	private:
-		uint8_t Memory[65536];
+		uint8_t JunkValue;
+		uint8_t Memory[0x10000];
 };
 
 #endif

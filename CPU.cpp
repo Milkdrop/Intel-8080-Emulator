@@ -26,6 +26,7 @@ const uint8_t InstructionCycles[] = {
 CPU::CPU (MMU* _mmu, uint8_t _ConsoleMode) {
 	// Set Status
 	InterruptsEnabled = 0;
+	Debugging = 0;
 	Halt = 0;
 	ClockCount = 0;
 	ConsoleMode = _ConsoleMode;
@@ -91,7 +92,11 @@ inline void CPU::Debug () {
 	printf ("E: 0x%02x\n", *reg_E);
 	printf ("H: 0x%02x\n", *reg_H);
 	printf ("L: 0x%02x\n", *reg_L);
-	printf ("M: 0x%02x\n", *reg_M);
+	if (ConsoleMode)
+		printf ("M: 0x%02x\n", GetByteAt(reg_HL));
+	else
+		printf ("M: ??\n");
+	
 	printf ("SP: 0x%04x\n", SP);
 	printf ("PC: 0x%04x\n", PC);
 
@@ -115,16 +120,20 @@ inline uint8_t CPU::GetByteAt (uint16_t Address) {
 }
 
 inline void CPU::SetByteAt (uint16_t Address, uint8_t Value) {
+	if (!ConsoleMode && Address < 0x2000) {
+		printf ("Illegal Write: Addr 0x%04x, at PC 0x%02x\n", Address, PC - 1);
+	}
+	
 	*mmu->MemoryMap[Address] = Value;
 }
 
 inline uint16_t CPU::GetWordAt (uint16_t Address) {
-	return *mmu->MemoryMap[Address] | (*mmu->MemoryMap[Address + 1] << 8);
+	return GetByteAt (Address) | (GetByteAt (Address + 1) << 8);
 }
 
 inline void CPU::SetWordAt (uint16_t Address, uint16_t Value) {
-	*mmu->MemoryMap[Address] = Value & 0xFF;
-	*mmu->MemoryMap[Address + 1] = Value >> 8;
+	SetByteAt (Address, Value & 0xFF);
+	SetByteAt (Address + 1, Value >> 8);
 }
 
 inline void CPU::StackPush (uint16_t Value) {
@@ -240,11 +249,23 @@ void CPU::Clock () {
 	Execute (Instruction);
 }
 
+uint8_t DrawingSpaceShip;
+
 void CPU::Execute (uint8_t Instruction) {
+	if (Debugging) {
+		printf ("INST 0x%02x\n", Instruction);
+		Debug ();
+	}
+	
+	if (PC == 0x0911) {
+		// Debugging Trap, ignore.
+		//DrawingSpaceShip = 1;
+		//printf ("Drawing Spaceship...\n");
+	}
+	
 	InstructionCount++;
 	ClockCount += InstructionCycles[Instruction];
-	reg_M = mmu->MemoryMap[reg_HL];
-	
+		
 	switch (Instruction) {
 	// MOVs
 	case 0b01000000: *reg_B = *reg_B; break; // MOV D, S
@@ -253,7 +274,7 @@ void CPU::Execute (uint8_t Instruction) {
 	case 0b01000011: *reg_B = *reg_E; break; // MOV D, S
 	case 0b01000100: *reg_B = *reg_H; break; // MOV D, S
 	case 0b01000101: *reg_B = *reg_L; break; // MOV D, S
-	case 0b01000110: *reg_B = *reg_M; break; // MOV D, S
+	case 0b01000110: *reg_B = GetByteAt (reg_HL); break; // MOV D, S
 	case 0b01000111: *reg_B = *reg_A; break; // MOV D, S
 
 	case 0b01001000: *reg_C = *reg_B; break; // MOV D, S
@@ -262,7 +283,7 @@ void CPU::Execute (uint8_t Instruction) {
 	case 0b01001011: *reg_C = *reg_E; break; // MOV D, S
 	case 0b01001100: *reg_C = *reg_H; break; // MOV D, S
 	case 0b01001101: *reg_C = *reg_L; break; // MOV D, S
-	case 0b01001110: *reg_C = *reg_M; break; // MOV D, S
+	case 0b01001110: *reg_C = GetByteAt (reg_HL); break; // MOV D, S
 	case 0b01001111: *reg_C = *reg_A; break; // MOV D, S
 
 	case 0b01010000: *reg_D = *reg_B; break; // MOV D, S
@@ -271,7 +292,7 @@ void CPU::Execute (uint8_t Instruction) {
 	case 0b01010011: *reg_D = *reg_E; break; // MOV D, S
 	case 0b01010100: *reg_D = *reg_H; break; // MOV D, S
 	case 0b01010101: *reg_D = *reg_L; break; // MOV D, S
-	case 0b01010110: *reg_D = *reg_M; break; // MOV D, S
+	case 0b01010110: *reg_D = GetByteAt (reg_HL); break; // MOV D, S
 	case 0b01010111: *reg_D = *reg_A; break; // MOV D, S
 
 	case 0b01011000: *reg_E = *reg_B; break; // MOV D, S
@@ -280,7 +301,7 @@ void CPU::Execute (uint8_t Instruction) {
 	case 0b01011011: *reg_E = *reg_E; break; // MOV D, S
 	case 0b01011100: *reg_E = *reg_H; break; // MOV D, S
 	case 0b01011101: *reg_E = *reg_L; break; // MOV D, S
-	case 0b01011110: *reg_E = *reg_M; break; // MOV D, S
+	case 0b01011110: *reg_E = GetByteAt (reg_HL); break; // MOV D, S
 	case 0b01011111: *reg_E = *reg_A; break; // MOV D, S
 
 	case 0b01100000: *reg_H = *reg_B; break; // MOV D, S
@@ -289,7 +310,7 @@ void CPU::Execute (uint8_t Instruction) {
 	case 0b01100011: *reg_H = *reg_E; break; // MOV D, S
 	case 0b01100100: *reg_H = *reg_H; break; // MOV D, S
 	case 0b01100101: *reg_H = *reg_L; break; // MOV D, S
-	case 0b01100110: *reg_H = *reg_M; break; // MOV D, S
+	case 0b01100110: *reg_H = GetByteAt (reg_HL); break; // MOV D, S
 	case 0b01100111: *reg_H = *reg_A; break; // MOV D, S
 
 	case 0b01101000: *reg_L = *reg_B; break; // MOV D, S
@@ -298,17 +319,17 @@ void CPU::Execute (uint8_t Instruction) {
 	case 0b01101011: *reg_L = *reg_E; break; // MOV D, S
 	case 0b01101100: *reg_L = *reg_H; break; // MOV D, S
 	case 0b01101101: *reg_L = *reg_L; break; // MOV D, S
-	case 0b01101110: *reg_L = *reg_M; break; // MOV D, S
+	case 0b01101110: *reg_L = GetByteAt (reg_HL); break; // MOV D, S
 	case 0b01101111: *reg_L = *reg_A; break; // MOV D, S
 
-	case 0b01110000: *reg_M = *reg_B; break; // MOV D, S
-	case 0b01110001: *reg_M = *reg_C; break; // MOV D, S
-	case 0b01110010: *reg_M = *reg_D; break; // MOV D, S
-	case 0b01110011: *reg_M = *reg_E; break; // MOV D, S
-	case 0b01110100: *reg_M = *reg_H; break; // MOV D, S
-	case 0b01110101: *reg_M = *reg_L; break; // MOV D, S
+	case 0b01110000: SetByteAt (reg_HL, *reg_B); break; // MOV D, S
+	case 0b01110001: SetByteAt (reg_HL, *reg_C); break; // MOV D, S
+	case 0b01110010: SetByteAt (reg_HL, *reg_D); break; // MOV D, S
+	case 0b01110011: SetByteAt (reg_HL, *reg_E); break; // MOV D, S
+	case 0b01110100: SetByteAt (reg_HL, *reg_H); break; // MOV D, S
+	case 0b01110101: SetByteAt (reg_HL, *reg_L); break; // MOV D, S
 	case 0b01110110: Halt = 1; break; // HLT
-	case 0b01110111: *reg_M = *reg_A; break; // MOV D, S
+	case 0b01110111: SetByteAt (reg_HL, *reg_A); break; // MOV D, S
 			
 	case 0b01111000: *reg_A = *reg_B; break; // MOV D, S
 	case 0b01111001: *reg_A = *reg_C; break; // MOV D, S
@@ -316,7 +337,7 @@ void CPU::Execute (uint8_t Instruction) {
 	case 0b01111011: *reg_A = *reg_E; break; // MOV D, S
 	case 0b01111100: *reg_A = *reg_H; break; // MOV D, S
 	case 0b01111101: *reg_A = *reg_L; break; // MOV D, S
-	case 0b01111110: *reg_A = *reg_M; break; // MOV D, S
+	case 0b01111110: *reg_A = GetByteAt (reg_HL); break; // MOV D, S
 	case 0b01111111: *reg_A = *reg_A; break; // MOV D, S
 
 	case 0b00000110: *reg_B = GetByteAt(PC++); break; // MVI D, #
@@ -325,7 +346,7 @@ void CPU::Execute (uint8_t Instruction) {
 	case 0b00011110: *reg_E = GetByteAt(PC++); break; // MVI D, #
 	case 0b00100110: *reg_H = GetByteAt(PC++); break; // MVI D, #
 	case 0b00101110: *reg_L = GetByteAt(PC++); break; // MVI D, #
-	case 0b00110110: *reg_M = GetByteAt(PC++); break; // MVI D, #
+	case 0b00110110: SetByteAt(reg_HL, GetByteAt(PC++)); break; // MVI D, #
 	case 0b00111110: *reg_A = GetByteAt(PC++); break; // MVI D, #
 
 	case 0b00001010: *reg_A = GetByteAt(reg_BC); break; // LDAX RP
@@ -357,7 +378,7 @@ void CPU::Execute (uint8_t Instruction) {
 	case 0b10000011: SetFlagsAdd (*reg_A, *reg_E, 0, 1); *reg_A += *reg_E; break; // ADD S
 	case 0b10000100: SetFlagsAdd (*reg_A, *reg_H, 0, 1); *reg_A += *reg_H; break; // ADD S
 	case 0b10000101: SetFlagsAdd (*reg_A, *reg_L, 0, 1); *reg_A += *reg_L; break; // ADD S
-	case 0b10000110: SetFlagsAdd (*reg_A, *reg_M, 0, 1); *reg_A += *reg_M; break; // ADD S
+	case 0b10000110: SetFlagsAdd (*reg_A, GetByteAt (reg_HL), 0, 1); *reg_A += GetByteAt (reg_HL); break; // ADD S
 	case 0b10000111: SetFlagsAdd (*reg_A, *reg_A, 0, 1); *reg_A += *reg_A; break; // ADD S
 	case 0b11000110: SetFlagsAdd (*reg_A, GetByteAt (PC), 0, 1); *reg_A += GetByteAt (PC++); break; // ADI #
 
@@ -367,7 +388,7 @@ void CPU::Execute (uint8_t Instruction) {
 	case 0b10001011: WorkValue = *reg_E + flag_C; SetFlagsAdd (*reg_A, *reg_E, flag_C, 1); *reg_A += WorkValue; break; // ADC S
 	case 0b10001100: WorkValue = *reg_H + flag_C; SetFlagsAdd (*reg_A, *reg_H, flag_C, 1); *reg_A += WorkValue; break; // ADC S
 	case 0b10001101: WorkValue = *reg_L + flag_C; SetFlagsAdd (*reg_A, *reg_L, flag_C, 1); *reg_A += WorkValue; break; // ADC S
-	case 0b10001110: WorkValue = *reg_M + flag_C; SetFlagsAdd (*reg_A, *reg_M, flag_C, 1); *reg_A += WorkValue; break; // ADC S
+	case 0b10001110: WorkValue = GetByteAt (reg_HL) + flag_C; SetFlagsAdd (*reg_A, GetByteAt (reg_HL), flag_C, 1); *reg_A += WorkValue; break; // ADC S
 	case 0b10001111: WorkValue = *reg_A + flag_C; SetFlagsAdd (*reg_A, *reg_A, flag_C, 1); *reg_A += WorkValue; break; // ADC S
 	case 0b11001110: WorkValue =  GetByteAt (PC) + flag_C; SetFlagsAdd (*reg_A, GetByteAt (PC++), flag_C, 1); *reg_A += WorkValue; break; // ACI #
 			
@@ -377,7 +398,7 @@ void CPU::Execute (uint8_t Instruction) {
 	case 0b10010011: SetFlagsSub (*reg_A, *reg_E, 0, 1); *reg_A -= *reg_E; break; // SUB S
 	case 0b10010100: SetFlagsSub (*reg_A, *reg_H, 0, 1); *reg_A -= *reg_H; break; // SUB S
 	case 0b10010101: SetFlagsSub (*reg_A, *reg_L, 0, 1); *reg_A -= *reg_L; break; // SUB S
-	case 0b10010110: SetFlagsSub (*reg_A, *reg_M, 0, 1); *reg_A -= *reg_M; break; // SUB S
+	case 0b10010110: SetFlagsSub (*reg_A, GetByteAt (reg_HL), 0, 1); *reg_A -= GetByteAt (reg_HL); break; // SUB S
 	case 0b10010111: SetFlagsSub (*reg_A, *reg_A, 0, 1); *reg_A -= *reg_A; break; // SUB S
 	case 0b11010110: SetFlagsSub (*reg_A, GetByteAt (PC), 0, 1); *reg_A -= GetByteAt (PC++); break; // SUI #
 
@@ -387,7 +408,7 @@ void CPU::Execute (uint8_t Instruction) {
 	case 0b10011011: WorkValue = *reg_E + flag_C; SetFlagsSub (*reg_A, *reg_E, flag_C, 1); *reg_A -= WorkValue; break; // SBB S
 	case 0b10011100: WorkValue = *reg_H + flag_C; SetFlagsSub (*reg_A, *reg_H, flag_C, 1); *reg_A -= WorkValue; break; // SBB S
 	case 0b10011101: WorkValue = *reg_L + flag_C; SetFlagsSub (*reg_A, *reg_L, flag_C, 1); *reg_A -= WorkValue; break; // SBB S
-	case 0b10011110: WorkValue = *reg_M + flag_C; SetFlagsSub (*reg_A, *reg_M, flag_C, 1); *reg_A -= WorkValue; break; // SBB S
+	case 0b10011110: WorkValue = GetByteAt (reg_HL) + flag_C; SetFlagsSub (*reg_A, GetByteAt (reg_HL), flag_C, 1); *reg_A -= WorkValue; break; // SBB S
 	case 0b10011111: WorkValue = *reg_A + flag_C; SetFlagsSub (*reg_A, *reg_A, flag_C, 1); *reg_A -= WorkValue; break; // SBB S
 	case 0b11011110: WorkValue = GetByteAt (PC) + flag_C; SetFlagsSub (*reg_A, GetByteAt (PC++), flag_C, 1); *reg_A -= WorkValue; break; // SBI #
 
@@ -402,7 +423,7 @@ void CPU::Execute (uint8_t Instruction) {
 	case 0b00011100: SetFlagsAdd (*reg_E, 1, 0, 3); *reg_E += 1; break; // INR D
 	case 0b00100100: SetFlagsAdd (*reg_H, 1, 0, 3); *reg_H += 1; break; // INR D
 	case 0b00101100: SetFlagsAdd (*reg_L, 1, 0, 3); *reg_L += 1; break; // INR D
-	case 0b00110100: SetFlagsAdd (*reg_M, 1, 0, 3); *reg_M += 1; break; // INR D
+	case 0b00110100: SetFlagsAdd (GetByteAt (reg_HL), 1, 0, 3); SetByteAt (reg_HL, GetByteAt (reg_HL) + 1); break; // INR D
 	case 0b00111100: SetFlagsAdd (*reg_A, 1, 0, 3); *reg_A += 1; break; // INR D
 
 	case 0b00000101: SetFlagsSub (*reg_B, 1, 0, 3); *reg_B -= 1; break; // DCR D
@@ -411,7 +432,7 @@ void CPU::Execute (uint8_t Instruction) {
 	case 0b00011101: SetFlagsSub (*reg_E, 1, 0, 3); *reg_E -= 1; break; // DCR D
 	case 0b00100101: SetFlagsSub (*reg_H, 1, 0, 3); *reg_H -= 1; break; // DCR D
 	case 0b00101101: SetFlagsSub (*reg_L, 1, 0, 3); *reg_L -= 1; break; // DCR D
-	case 0b00110101: SetFlagsSub (*reg_M, 1, 0, 3); *reg_M -= 1; break; // DCR D
+	case 0b00110101: SetFlagsSub (GetByteAt (reg_HL), 1, 0, 3); SetByteAt (reg_HL, GetByteAt (reg_HL) - 1); break; // DCR D
 	case 0b00111101: SetFlagsSub (*reg_A, 1, 0, 3); *reg_A -= 1; break; // DCR D
 
 	case 0b00000011: reg_BC++; break; // INX RP
@@ -441,7 +462,7 @@ void CPU::Execute (uint8_t Instruction) {
 	case 0b10100011: flag_C = 0; flag_AC = ((*reg_A | *reg_E) & 0x08) != 0; *reg_A &= *reg_E; SetZSP (*reg_A); break; // ANA S
 	case 0b10100100: flag_C = 0; flag_AC = ((*reg_A | *reg_H) & 0x08) != 0; *reg_A &= *reg_H; SetZSP (*reg_A); break; // ANA S
 	case 0b10100101: flag_C = 0; flag_AC = ((*reg_A | *reg_L) & 0x08) != 0; *reg_A &= *reg_L; SetZSP (*reg_A); break; // ANA S
-	case 0b10100110: flag_C = 0; flag_AC = ((*reg_A | *reg_M) & 0x08) != 0; *reg_A &= *reg_M; SetZSP (*reg_A); break; // ANA S
+	case 0b10100110: flag_C = 0; flag_AC = ((*reg_A | GetByteAt(reg_HL)) & 0x08) != 0; *reg_A &= GetByteAt(reg_HL); SetZSP (*reg_A); break; // ANA S
 	case 0b10100111: flag_C = 0; flag_AC = ((*reg_A | *reg_A) & 0x08) != 0; *reg_A &= *reg_A; SetZSP (*reg_A); break; // ANA S
 	case 0b11100110: flag_C = 0; flag_AC = ((*reg_A | GetByteAt (PC)) & 0x08) != 0; *reg_A &= GetByteAt (PC++); SetZSP (*reg_A); break; // ANI #
 
@@ -451,7 +472,7 @@ void CPU::Execute (uint8_t Instruction) {
 	case 0b10101011: *reg_A ^= *reg_E; SetFlagsAdd (*reg_A, 0, 0, 0); break; // XRA S
 	case 0b10101100: *reg_A ^= *reg_H; SetFlagsAdd (*reg_A, 0, 0, 0); break; // XRA S
 	case 0b10101101: *reg_A ^= *reg_L; SetFlagsAdd (*reg_A, 0, 0, 0); break; // XRA S
-	case 0b10101110: *reg_A ^= *reg_M; SetFlagsAdd (*reg_A, 0, 0, 0); break; // XRA S
+	case 0b10101110: *reg_A ^= GetByteAt(reg_HL); SetFlagsAdd (*reg_A, 0, 0, 0); break; // XRA S
 	case 0b10101111: *reg_A ^= *reg_A; SetFlagsAdd (*reg_A, 0, 0, 0); break; // XRA S
 	case 0b11101110: *reg_A ^= GetByteAt (PC++); SetFlagsAdd (*reg_A, 0, 0, 0); break; // XRI #
 
@@ -461,7 +482,7 @@ void CPU::Execute (uint8_t Instruction) {
 	case 0b10110011: *reg_A |= *reg_E; SetFlagsAdd (*reg_A, 0, 0, 0); break; // ORA S
 	case 0b10110100: *reg_A |= *reg_H; SetFlagsAdd (*reg_A, 0, 0, 0); break; // ORA S
 	case 0b10110101: *reg_A |= *reg_L; SetFlagsAdd (*reg_A, 0, 0, 0); break; // ORA S
-	case 0b10110110: *reg_A |= *reg_M; SetFlagsAdd (*reg_A, 0, 0, 0); break; // ORA S
+	case 0b10110110: *reg_A |= GetByteAt(reg_HL); SetFlagsAdd (*reg_A, 0, 0, 0); break; // ORA S
 	case 0b10110111: *reg_A |= *reg_A; SetFlagsAdd (*reg_A, 0, 0, 0); break; // ORA S
 	case 0b11110110: *reg_A |= GetByteAt (PC++); SetFlagsAdd (*reg_A, 0, 0, 0); break; // ORI #
 	
@@ -472,7 +493,7 @@ void CPU::Execute (uint8_t Instruction) {
 	case 0b10111011: SetFlagsSub (*reg_A, *reg_E, 0, 1); break; // CMP S
 	case 0b10111100: SetFlagsSub (*reg_A, *reg_H, 0, 1); break; // CMP S
 	case 0b10111101: SetFlagsSub (*reg_A, *reg_L, 0, 1); break; // CMP S
-	case 0b10111110: SetFlagsSub (*reg_A, *reg_M, 0, 1); break; // CMP S
+	case 0b10111110: SetFlagsSub (*reg_A, GetByteAt(reg_HL), 0, 1); break; // CMP S
 	case 0b10111111: SetFlagsSub (*reg_A, *reg_A, 0, 1); break; // CMP S
 	case 0b11111110: SetFlagsSub (*reg_A, GetByteAt (PC++), 0, 1); break; // CPI #
 	
@@ -510,7 +531,7 @@ void CPU::Execute (uint8_t Instruction) {
 	case 0b11101000: if (flag_P) {PC = StackPop (); ClockCount += 6;} break; // Rccc
 	case 0b11110000: if (!flag_S) {PC = StackPop (); ClockCount += 6;} break; // Rccc
 	case 0b11111000: if (flag_S) {PC = StackPop (); ClockCount += 6;} break; // Rccc
-	case 0b11001001: PC = StackPop (); break; // RET
+	case 0b11001001: if (DrawingSpaceShip) {DrawingSpaceShip = 0; printf ("Returning\n");} PC = StackPop (); break; // RET
 	case 0b11011001: PC = StackPop (); break; // RET - Undocumented
 
 	case 0b11000111: StackPush (PC); PC = 0b000 << 3; break; // RST n
@@ -535,13 +556,13 @@ void CPU::Execute (uint8_t Instruction) {
 	case 0b11010011: WorkValue = GetByteAt (PC++); if (WorkValue == 2) {ShiftOffset = *reg_A & 7;} else if (WorkValue == 4) {reg_SHIFT >>= 8; reg_SHIFT |= *reg_A << 8;} break; // OUT p
 
 	// NOPs - Undocumented
-	case 0b00001000: break;
+	/*case 0b00001000: break;
 	case 0b00010000: break;
 	case 0b00011000: break;
 	case 0b00100000: break;
 	case 0b00101000: break;
 	case 0b00110000: break;
-	case 0b00111000: break;
+	case 0b00111000: break;*/
 
 	default:
 		fprintf (stderr, "Unknown Instruction 0x%02x at 0x%04x\n", Instruction, PC - 1);

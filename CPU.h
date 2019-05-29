@@ -15,6 +15,7 @@ class CPU {
 		uint8_t Port[7];
 	
 		// Status
+		uint8_t Debugging;
 		uint8_t InterruptsEnabled;
 		uint8_t Halt;
 		uint64_t ClockCount;
@@ -33,7 +34,6 @@ class CPU {
 		// Registers
 		uint8_t true_reg_A;
 		uint8_t* reg_A = &true_reg_A; // Pointer uniformity
-		uint8_t* reg_M;
 	
 		uint16_t reg_BC;
 		uint8_t* reg_B = ((uint8_t*) &reg_BC) + 1;
