@@ -12,7 +12,8 @@ class CPU {
 		void Interrupt (uint8_t ID);
 		
 		// I/O
-		uint8_t Port[7];
+		uint8_t InPort[4];
+		uint8_t OutPort[7];
 	
 		// Status
 		uint8_t InterruptsEnabled;

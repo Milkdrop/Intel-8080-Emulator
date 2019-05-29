@@ -4,6 +4,7 @@
 #include "Display.h"
 #include "MMU.h"
 #include "CPU.h"
+#include "SoundChip.h"
 
 void OpenFileError (const char* Filename) {
 	printf ("\n[ERR] There was an error opening the file: %s\n", Filename);
@@ -52,6 +53,7 @@ int main (int argc, char** argv) {
 	MMU mmu (ConsoleMode);
 	CPU cpu (&mmu, ConsoleMode);
 	Display* Disp = NULL;
+	SoundChip soundchip;
 	
 	printf ("[INFO] Reading ROM...");
 	if (ConsoleMode) {
@@ -70,7 +72,9 @@ int main (int argc, char** argv) {
 	uint32_t LastDraw = 0;
 	uint32_t LastDebugPrint = 0;
 	uint32_t LastInput = 0;
+	uint32_t LastSound = 0;
 	uint8_t DrawFull = 0;
+	uint8_t IsPlayingSound = 0;
 	
 	printf ("\n");
 	while (!cpu.Halt) {
@@ -98,39 +102,97 @@ int main (int argc, char** argv) {
 				}
 				
 				// Cleanup before input
-				cpu.Port[0] &= 0b10001111;
-				cpu.Port[1] &= 0b10001000;
-				cpu.Port[2] &= 0b10001011;
+				cpu.InPort[0] &= 0b10001111;
+				cpu.InPort[1] &= 0b10001000;
+				cpu.InPort[2] &= 0b10001011;
 				
 				if (Keyboard[SDL_SCANCODE_SPACE]) { // Fire
-					cpu.Port[0] |= 1 << 4;
-					cpu.Port[1] |= 1 << 4;
-					cpu.Port[2] |= 1 << 4; // P2
+					cpu.InPort[0] |= 1 << 4;
+					cpu.InPort[1] |= 1 << 4;
+					cpu.InPort[2] |= 1 << 4; // P2
 				}
 
 				if (Keyboard[SDL_SCANCODE_A]) { // Left
-					cpu.Port[0] |= 1 << 5;
-					cpu.Port[1] |= 1 << 5;
-					cpu.Port[2] |= 1 << 5; // P2
+					cpu.InPort[0] |= 1 << 5;
+					cpu.InPort[1] |= 1 << 5;
+					cpu.InPort[2] |= 1 << 5; // P2
 				}
 
 				if (Keyboard[SDL_SCANCODE_D]) { // P1 Right
-					cpu.Port[0] |= 1 << 6;
-					cpu.Port[1] |= 1 << 6;
-					cpu.Port[2] |= 1 << 6; // P2
+					cpu.InPort[0] |= 1 << 6;
+					cpu.InPort[1] |= 1 << 6;
+					cpu.InPort[2] |= 1 << 6; // P2
 				}
 
 				if (Keyboard[SDL_SCANCODE_RETURN]) // Credit
-					cpu.Port[1] |= 1 << 0;
+					cpu.InPort[1] |= 1 << 0;
 
 				if (Keyboard[SDL_SCANCODE_1]) // 1P Start
-					cpu.Port[1] |= 1 << 2;
+					cpu.InPort[1] |= 1 << 2;
 
 				if (Keyboard[SDL_SCANCODE_2]) // 2P Start
-					cpu.Port[1] |= 1 << 1;
+					cpu.InPort[1] |= 1 << 1;
 
 				if (Keyboard[SDL_SCANCODE_DELETE]) // Tilt
-					cpu.Port[2] |= 1 << 2;
+					cpu.InPort[2] |= 1 << 2;
+			}
+			
+			if (CurrentTime - LastSound > 1000 / 60 || LastSound > CurrentTime) { // 30 Hz Audio
+				LastSound = CurrentTime;
+				
+				// Check Audio
+				if (cpu.OutPort[3] & (1 << 0)) { // UFO - Loop
+					soundchip.PlaySound (0);
+				}
+				
+				if (cpu.OutPort[3] & (1 << 1)) { // Shoot
+					if ((IsPlayingSound & (1 << 1)) == 0)
+						soundchip.PlaySound (1);
+					IsPlayingSound |= 1 << 1;
+				} else
+					IsPlayingSound &= 0b11111101;
+				
+				if (cpu.OutPort[3] & (1 << 2)) { // Player Death
+					if ((IsPlayingSound & (1 << 2)) == 0)
+						soundchip.PlaySound (2);
+					IsPlayingSound |= 1 << 2;
+				} else
+					IsPlayingSound &= 0b11111011;
+				
+				if (cpu.OutPort[3] & (1 << 3)) { // Invader Death
+					if ((IsPlayingSound & (1 << 3)) == 0)
+						soundchip.PlaySound (3);
+					IsPlayingSound |= 1 << 3;
+				} else
+					IsPlayingSound &= 0b11110111;
+				
+				if (cpu.OutPort[5] & (1 << 0)) { // Fleet 1
+					if ((IsPlayingSound & (1 << 4)) == 0)
+						soundchip.PlaySound (4);
+					IsPlayingSound |= 1 << 4;
+				} else
+					IsPlayingSound &= 0b11101111;
+				
+				if (cpu.OutPort[5] & (1 << 1)) { // Fleet 2
+					if ((IsPlayingSound & (1 << 5)) == 0)
+						soundchip.PlaySound (5);
+					IsPlayingSound |= 1 << 5;
+				} else
+					IsPlayingSound &= 0b11011111;
+				
+				if (cpu.OutPort[5] & (1 << 2)) { // Fleet 3
+					if ((IsPlayingSound & (1 << 6)) == 0)
+						soundchip.PlaySound (6);
+					IsPlayingSound |= 1 << 6;
+				} else
+					IsPlayingSound &= 0b10111111;
+				
+				if (cpu.OutPort[5] & (1 << 3)) { // Fleet 4
+					if ((IsPlayingSound & (1 << 7)) == 0)
+						soundchip.PlaySound (7);
+					IsPlayingSound |= 1 << 7;
+				} else
+					IsPlayingSound &= 0b01111111;
 			}
 			
 			if (CurrentTime - LastDebugPrint > 5000 || LastDebugPrint > CurrentTime) { // 5 Seconds - Manage occasional prints

@@ -34,11 +34,13 @@ CPU::CPU (MMU* _mmu, uint8_t _ConsoleMode) {
 	WorkValue = 0;
 	
 	// Set Ports + Hardware
-	memset (Port, 0, sizeof(Port));
-	Port[0] |= 1 << 1;
-	Port[0] |= 1 << 2;
-	Port[0] |= 1 << 3;
-	Port[1] |= 1 << 3;
+	memset (InPort, 0, sizeof(InPort));
+	memset (OutPort, 0, sizeof(OutPort));
+	
+	InPort[0] |= 1 << 1;
+	InPort[0] |= 1 << 2;
+	InPort[0] |= 1 << 3;
+	InPort[1] |= 1 << 3;
 	
 	reg_SHIFT = 0;
 	ShiftOffset = 0;
@@ -536,8 +538,8 @@ void CPU::Execute (uint8_t Instruction) {
 	case 0b11100001: reg_HL = StackPop(); break; // POP RP
 	case 0b11110001: PopPSW(); break; // POP RP (PSW)
 
-	case 0b11011011: WorkValue = GetByteAt (PC++); if (WorkValue == 3) {*reg_A = reg_SHIFT >> (8 - ShiftOffset);} else {*reg_A = Port[WorkValue];} break; // IN p
-	case 0b11010011: WorkValue = GetByteAt (PC++); if (WorkValue == 2) {ShiftOffset = *reg_A & 7;} else if (WorkValue == 4) {reg_SHIFT >>= 8; reg_SHIFT |= *reg_A << 8;} break; // OUT p
+	case 0b11011011: WorkValue = GetByteAt (PC++); if (WorkValue == 3) {*reg_A = reg_SHIFT >> (8 - ShiftOffset);} else {*reg_A = InPort[WorkValue];} break; // IN p
+	case 0b11010011: WorkValue = GetByteAt (PC++); if (WorkValue == 2) {ShiftOffset = *reg_A & 7;} else if (WorkValue == 4) {reg_SHIFT >>= 8; reg_SHIFT |= *reg_A << 8;} else OutPort[WorkValue] = *reg_A; break; // OUT p
 
 	// NOPs - Undocumented
 	case 0b00001000: break;
