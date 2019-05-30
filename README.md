@@ -11,7 +11,7 @@ A Fully functional Intel 8080 emulator written in C++ and SDL2, that can run the
 
 In case you don't want any sound, make sure to pass an additional `--no-sound` parameter at the end.
 
-Space Invaders Built-In Controls:
+## Space Invaders Built-In Controls:
 - **ENTER:** `Insert Coin`
 - **1:** `Start 1 Player Game`
 - **2:** `Start 2 Players Game`
