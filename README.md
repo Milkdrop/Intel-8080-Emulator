@@ -8,6 +8,7 @@ A Fully functional Intel 8080 emulator written in C++ and SDL2, that can run the
 ## To Run:
 - **A program:** `./main -p Demos/PROGNAME.COM`
 - **A game:** `./main -g Demos/invadersfull` (give full assembly that will be copied at 0x0000)
+In case you don't want any sound, make sure to pass an additional `--no-sound` parameter at the end.
 
 Space Invaders Built-In Controls:
 - **ENTER:** `Insert Coin`

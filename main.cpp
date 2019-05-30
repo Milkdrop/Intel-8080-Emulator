@@ -34,7 +34,7 @@ void LoadROMData (MMU* mmu, const char* Filename, uint16_t Address) {
 }
 
 int main (int argc, char** argv) {
-	if (argc != 3) {
+	if (argc < 3) {
 		printf ("Please specify -ROMType ROMFileName:\n");
 		printf ("\t- %s -g Demos/invaders\t\t// For Games, input the name behind the file extension.\n", argv[0]);
 		printf ("\t- %s -p Demos/CPUTEST.COM\t\t\t// For Programs\n", argv[0]);
@@ -53,7 +53,8 @@ int main (int argc, char** argv) {
 	MMU mmu (ConsoleMode);
 	CPU cpu (&mmu, ConsoleMode);
 	Display* Disp = NULL;
-	SoundChip soundchip;
+	SoundChip* soundchip = NULL;
+	uint8_t SoundOn = 0;
 	
 	printf ("[INFO] Reading ROM...");
 	if (ConsoleMode) {
@@ -61,9 +62,18 @@ int main (int argc, char** argv) {
 	} else {
 		LoadROMData (&mmu, argv[2], 0x0000);
 		Disp = new Display("Intel 8080", 224, 256, 2);
+		SoundOn = 1;
+		
+		if (argc == 4) {
+			if (strcmp(argv[3], "--no-sound") == 0)
+				SoundOn = 0;
+		}
 	}
 	
 	printf ("OK\n");
+	
+	if (SoundOn)
+		soundchip = new SoundChip;
 	
 	// Timers + Loop Variables
 	SDL_Event ev;
@@ -137,59 +147,59 @@ int main (int argc, char** argv) {
 					cpu.InPort[2] |= 1 << 2;
 			}
 			
-			if (CurrentTime - LastSound > 1000 / 60 || LastSound > CurrentTime) { // 30 Hz Audio
+			if (SoundOn && (CurrentTime - LastSound > 1000 / 60 || LastSound > CurrentTime)) { // 30 Hz Audio
 				LastSound = CurrentTime;
 				
 				// Check Audio
 				if (cpu.OutPort[3] & (1 << 0)) { // UFO - Loop
-					soundchip.PlaySound (0);
+					soundchip->PlaySound (0);
 				}
 				
 				if (cpu.OutPort[3] & (1 << 1)) { // Shoot
 					if ((IsPlayingSound & (1 << 1)) == 0)
-						soundchip.PlaySound (1);
+						soundchip->PlaySound (1);
 					IsPlayingSound |= 1 << 1;
 				} else
 					IsPlayingSound &= 0b11111101;
 				
 				if (cpu.OutPort[3] & (1 << 2)) { // Player Death
 					if ((IsPlayingSound & (1 << 2)) == 0)
-						soundchip.PlaySound (2);
+						soundchip->PlaySound (2);
 					IsPlayingSound |= 1 << 2;
 				} else
 					IsPlayingSound &= 0b11111011;
 				
 				if (cpu.OutPort[3] & (1 << 3)) { // Invader Death
 					if ((IsPlayingSound & (1 << 3)) == 0)
-						soundchip.PlaySound (3);
+						soundchip->PlaySound (3);
 					IsPlayingSound |= 1 << 3;
 				} else
 					IsPlayingSound &= 0b11110111;
 				
 				if (cpu.OutPort[5] & (1 << 0)) { // Fleet 1
 					if ((IsPlayingSound & (1 << 4)) == 0)
-						soundchip.PlaySound (4);
+						soundchip->PlaySound (4);
 					IsPlayingSound |= 1 << 4;
 				} else
 					IsPlayingSound &= 0b11101111;
 				
 				if (cpu.OutPort[5] & (1 << 1)) { // Fleet 2
 					if ((IsPlayingSound & (1 << 5)) == 0)
-						soundchip.PlaySound (5);
+						soundchip->PlaySound (5);
 					IsPlayingSound |= 1 << 5;
 				} else
 					IsPlayingSound &= 0b11011111;
 				
 				if (cpu.OutPort[5] & (1 << 2)) { // Fleet 3
 					if ((IsPlayingSound & (1 << 6)) == 0)
-						soundchip.PlaySound (6);
+						soundchip->PlaySound (6);
 					IsPlayingSound |= 1 << 6;
 				} else
 					IsPlayingSound &= 0b10111111;
 				
 				if (cpu.OutPort[5] & (1 << 3)) { // Fleet 4
 					if ((IsPlayingSound & (1 << 7)) == 0)
-						soundchip.PlaySound (7);
+						soundchip->PlaySound (7);
 					IsPlayingSound |= 1 << 7;
 				} else
 					IsPlayingSound &= 0b01111111;
