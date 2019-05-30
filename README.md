@@ -13,8 +13,8 @@ Space Invaders Built-In Controls:
 - **ENTER:** `Insert Coin`
 - **1:** `Start 1 Player Game`
 - **2:** `Start 2 Players Game`
-- **A:** `Move Left (P1 and P2)`
-- **D:** `Move Right (P1 and P2)`
+- **A or Left Arrow:** `Move Left (P1 and P2)`
+- **D or Right Arrow:** `Move Right (P1 and P2)`
 - **Space:** `Shoot (P1 and P2)`
 - **Delete:** `Tilt Machine`
 
