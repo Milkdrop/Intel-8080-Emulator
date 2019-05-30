@@ -112,13 +112,13 @@ int main (int argc, char** argv) {
 					cpu.InPort[2] |= 1 << 4; // P2
 				}
 
-				if (Keyboard[SDL_SCANCODE_A]) { // Left
+				if (Keyboard[SDL_SCANCODE_A] || Keyboard[SDL_SCANCODE_LEFT]) { // Left
 					cpu.InPort[0] |= 1 << 5;
 					cpu.InPort[1] |= 1 << 5;
 					cpu.InPort[2] |= 1 << 5; // P2
 				}
 
-				if (Keyboard[SDL_SCANCODE_D]) { // P1 Right
+				if (Keyboard[SDL_SCANCODE_D] || Keyboard[SDL_SCANCODE_RIGHT]) { // Right
 					cpu.InPort[0] |= 1 << 6;
 					cpu.InPort[1] |= 1 << 6;
 					cpu.InPort[2] |= 1 << 6; // P2
