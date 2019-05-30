@@ -21,14 +21,6 @@ class SoundChip {
 		Mix_Chunk *Fleet4 = nullptr;
 	
 		uint8_t ch_UFOSound;
-		uint8_t ch_Shoot;
-		uint8_t ch_PlayerDeath;
-		uint8_t ch_InvaderDeath;
-	
-		uint8_t ch_Fleet1;
-		uint8_t ch_Fleet2;
-		uint8_t ch_Fleet3;
-		uint8_t ch_Fleet4;
 };
 
 #endif

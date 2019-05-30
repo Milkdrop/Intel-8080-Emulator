@@ -3,7 +3,7 @@
 #include "SoundChip.h"
 
 SoundChip::SoundChip () {
-	if (Mix_OpenAudio (22050, AUDIO_S16SYS, 2, 4096) != 0) {
+	if (Mix_OpenAudio (22050, AUDIO_S16SYS, 2, 64) != 0) { // A Chunk Size of 64? Yup
 		printf ("Failed to Initialize SDL Mixer: %s\n", Mix_GetError());
 	}
 	
@@ -38,7 +38,7 @@ SoundChip::SoundChip () {
 
 void SoundChip::PlaySound (uint8_t ID) {
 	switch (ID) {
-		case 0: Mix_PlayChannel(0, UFOSound, 0); break;
+		case 0: if (Mix_Playing (ch_UFOSound) == 0) ch_UFOSound = Mix_PlayChannel(0, UFOSound, 0); break;
 		case 1: Mix_PlayChannel(1, Shoot, 0); break;
 		case 2: Mix_PlayChannel(2, PlayerDeath, 0); break;
 		case 3: Mix_PlayChannel(3, InvaderDeath, 0); break;
