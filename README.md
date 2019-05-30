@@ -1,5 +1,5 @@
 # Intel-8080-Emulator
-A Fully functional Intel 8080 emulator that can run the classic Space Invaders Arcade Game, and also some COM Programs of the time.
+A Fully functional Intel 8080 emulator written in C++ and SDL2, that can run the classic Space Invaders Arcade Game, and also some COM Programs of the time.
 
 <p align="center">
   <img align="center" src="https://github.com/MoonfireSeco/Intel-8080-Emulator/raw/master/Pictures/SpaceInvaders.png">
