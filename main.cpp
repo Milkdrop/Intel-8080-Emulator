@@ -36,6 +36,11 @@ void LoadROMData (MMU* mmu, const char* Filename, uint16_t Address) {
     fclose (ROMData);
 }
 
+uint64_t GetCurrentTime (time_point <high_resolution_clock>* StartTime) {
+	auto TimeDifference = high_resolution_clock::now () - *StartTime;
+	return duration_cast <microseconds> (TimeDifference).count (); // Get Microseconds
+}
+
 int main (int argc, char** argv) {
 	if (argc < 3) {
 		printf ("Please specify -ROMType ROMFileName:\n");
@@ -81,23 +86,37 @@ int main (int argc, char** argv) {
 	// Timers + Loop Variables
 	SDL_Event ev;
 	const uint8_t *Keyboard = SDL_GetKeyboardState(NULL);
-	uint32_t CurrentTime = 0;
-	uint32_t LastDraw = 0;
-	uint32_t LastDebugPrint = 0;
-	uint32_t LastInput = 0;
-	uint32_t LastSound = 0;
+	uint64_t CurrentTime = 0;
+	uint64_t LastThrottle = 0;
+	uint64_t LastDraw = 0;
+	uint64_t LastDebugPrint = 0;
+	uint64_t LastInput = 0;
+	uint64_t LastSound = 0;
 	uint8_t DrawFull = 0;
 	uint8_t IsPlayingSound = 0;
-	
+	uint32_t ClocksPerMS = 400;
+	uint64_t LastInstructionCount = 0;
 	auto StartTime = high_resolution_clock::now ();
 	
 	printf ("\n");
 	while (!cpu.Halt) {
 		if (!ConsoleMode) {
-			auto TimeDifference = high_resolution_clock::now () - StartTime;
-			CurrentTime = duration_cast <milliseconds> (TimeDifference).count (); // Get Miliseconds
+			CurrentTime = GetCurrentTime (&StartTime);
 			
-			if (CurrentTime - LastDraw > 1000 / 120 || LastDraw > CurrentTime) { // 120 Hz - Manage Screen (Half screen in a cycle, then end screen in another)
+			if (CurrentTime - LastThrottle <= 4000) { // Check every 4 ms
+				if (cpu.InstructionCount - LastInstructionCount >= ClocksPerMS << 2) { // Throttle CPU
+					uint32_t usToSleep = 4000 - (CurrentTime - LastThrottle); // Sleep for the rest of the 4 ms
+					timespec req = {0, usToSleep * 1000};
+					nanosleep (&req, (timespec *) NULL);
+					LastThrottle = GetCurrentTime (&StartTime);
+					LastInstructionCount = cpu.InstructionCount;
+				}
+			} else { // Host CPU is slower or equal to i8080
+				LastThrottle = CurrentTime;
+				LastInstructionCount = cpu.InstructionCount;
+			}
+			
+			if (CurrentTime - LastDraw > 1000000 / 120 || LastDraw > CurrentTime) { // 120 Hz - Manage Screen (Half screen in a cycle, then end screen in another)
 				LastDraw = CurrentTime;
 
 				if (DrawFull) {
@@ -109,7 +128,7 @@ int main (int argc, char** argv) {
 				DrawFull = 1 - DrawFull;
 			}
 			
-			if (CurrentTime - LastInput > 1000 / 30 || LastInput > CurrentTime) { // 30 Hz - Manage Events
+			if (CurrentTime - LastInput > 1000000 / 30 || LastInput > CurrentTime) { // 30 Hz - Manage Events
 				LastInput = CurrentTime;
 				while (SDL_PollEvent(&ev)) {
 					if (ev.type == SDL_QUIT) {
@@ -153,7 +172,7 @@ int main (int argc, char** argv) {
 					cpu.InPort[2] |= 1 << 2;
 			}
 			
-			if (SoundOn && (CurrentTime - LastSound > 1000 / 60 || LastSound > CurrentTime)) { // 30 Hz Audio
+			if (SoundOn && (CurrentTime - LastSound > 1000000 / 60 || LastSound > CurrentTime)) { // 30 Hz Audio
 				LastSound = CurrentTime;
 				
 				// Check Audio
@@ -211,8 +230,8 @@ int main (int argc, char** argv) {
 					IsPlayingSound &= 0b01111111;
 			}
 			
-			if (CurrentTime - LastDebugPrint > 5000 || LastDebugPrint > CurrentTime) { // 5 Seconds - Manage occasional prints
-				float Duration = (CurrentTime - LastDebugPrint) / 1000;
+			if (CurrentTime - LastDebugPrint > 5000000 || LastDebugPrint > CurrentTime) { // 5 Seconds - Manage occasional prints
+				float Duration = (CurrentTime - LastDebugPrint) / 1000000;
 				uint64_t ClocksPerSec = cpu.ClockCount / Duration;
 				LastDebugPrint = CurrentTime;
 				printf ("[INFO] Running at @%f MHz (%lu Instructions Per Second)\n", (float) ClocksPerSec / 1000000, (uint64_t) (cpu.InstructionCount / Duration));
