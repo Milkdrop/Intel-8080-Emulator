@@ -1,10 +1,13 @@
 #include <stdio.h>
 #include <SDL2/SDL.h>
 #include <time.h>
+#include <chrono>
 #include "Display.h"
 #include "MMU.h"
 #include "CPU.h"
 #include "SoundChip.h"
+
+using namespace std::chrono;
 
 void OpenFileError (const char* Filename) {
 	printf ("\n[ERR] There was an error opening the file: %s\n", Filename);
@@ -86,11 +89,14 @@ int main (int argc, char** argv) {
 	uint8_t DrawFull = 0;
 	uint8_t IsPlayingSound = 0;
 	
+	auto StartTime = high_resolution_clock::now ();
+	
 	printf ("\n");
 	while (!cpu.Halt) {
 		if (!ConsoleMode) {
-			CurrentTime = ((float) clock() / CLOCKS_PER_SEC) * 1000; // Get Miliseconds
-
+			auto TimeDifference = high_resolution_clock::now () - StartTime;
+			CurrentTime = duration_cast <milliseconds> (TimeDifference).count (); // Get Miliseconds
+			
 			if (CurrentTime - LastDraw > 1000 / 120 || LastDraw > CurrentTime) { // 120 Hz - Manage Screen (Half screen in a cycle, then end screen in another)
 				LastDraw = CurrentTime;
 
