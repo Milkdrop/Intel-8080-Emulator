@@ -96,6 +96,7 @@ int main (int argc, char** argv) {
 	uint8_t IsPlayingSound = 0;
 	uint32_t ClocksPerMS = 400;
 	uint64_t LastInstructionCount = 0;
+	uint64_t ClockCompensation = 0;
 	auto StartTime = high_resolution_clock::now ();
 	
 	printf ("\n");
@@ -104,12 +105,14 @@ int main (int argc, char** argv) {
 			CurrentTime = GetCurrentTime (&StartTime);
 			
 			if (CurrentTime - LastThrottle <= 4000) { // Check every 4 ms
-				if (cpu.InstructionCount - LastInstructionCount >= ClocksPerMS << 2) { // Throttle CPU
+				if (cpu.InstructionCount - LastInstructionCount >= (ClocksPerMS << 2) + ClockCompensation) { // Throttle CPU
 					uint32_t usToSleep = 4000 - (CurrentTime - LastThrottle); // Sleep for the rest of the 4 ms
 					timespec req = {0, usToSleep * 1000};
 					nanosleep (&req, (timespec *) NULL);
 					LastThrottle = GetCurrentTime (&StartTime);
 					LastInstructionCount = cpu.InstructionCount;
+					
+					ClockCompensation = (ClocksPerMS * ((LastThrottle - CurrentTime) - usToSleep)) / 1000;
 				}
 			} else { // Host CPU is slower or equal to i8080
 				LastThrottle = CurrentTime;
