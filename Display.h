@@ -12,8 +12,10 @@ private:
 	uint16_t PixelSize;
 	uint16_t Width;
 	uint16_t Height;
+	uint16_t Pixels [224 * 256];
 	SDL_Window* MainWindow;
 	SDL_Renderer* MainRenderer;
+	SDL_Texture* MainTexture;
 };
 
 #endif
